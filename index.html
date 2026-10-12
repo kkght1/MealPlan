@@ -1,0 +1,650 @@
+<title>Family Meal Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: a fridge-door week — stacked day cards, three meal rows each, tagged chips you hold and drag; saved meals tray docked above the tab bar. */
+:root{
+  --bg:#F2F5F3; --surface:#FFFFFF; --ink:#16232A; --muted:#5D6B70; --line:#D9E2DF;
+  --fam:#1C6E62; --fam-soft:#DCEFEA;
+  --baby:#B35F0E; --baby-soft:#FCE9D3;
+  --both:#5546A6; --both-soft:#E6E2F7;
+  --danger:#B3261E; --danger-soft:#FBE3E1;
+  --shadow:0 10px 30px rgba(22,35,42,.18);
+  --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --tab-h:60px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1518; --surface:#182126; --ink:#E5ECEB; --muted:#93A2A5; --line:#2A363B;
+  --fam:#62C6B5; --fam-soft:#163833; --baby:#F2A75C; --baby-soft:#3A2814; --both:#AFA2F2; --both-soft:#28244A;
+  --danger:#F28B82; --danger-soft:#3D1D1B; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1518; --surface:#182126; --ink:#E5ECEB; --muted:#93A2A5; --line:#2A363B;
+  --fam:#62C6B5; --fam-soft:#163833; --baby:#F2A75C; --baby-soft:#3A2814; --both:#AFA2F2; --both-soft:#28244A;
+  --danger:#F28B82; --danger-soft:#3D1D1B; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--fam);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px}
+
+/* Header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding-block:12px 10px;border-bottom:1px solid var(--line)}
+.weekrow{display:flex;align-items:center;gap:8px}
+.weekrow h1{font-family:var(--f-display);font-weight:800;font-size:1.45rem;letter-spacing:-.01em;margin:0;flex:1;min-width:0;text-wrap:balance}
+.weekrow h1 small{display:block;font-family:var(--f-body);font-weight:500;font-size:.8rem;color:var(--muted);letter-spacing:0}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:1.1rem;flex:none}
+.textbtn{height:40px;padding-inline:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:.85rem}
+.seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;margin-top:10px}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:7px 4px;font-weight:600;font-size:.85rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* Plan */
+main{padding-block:12px calc(var(--tab-h) + 150px + env(safe-area-inset-bottom,0px))}
+.days{display:flex;flex-direction:column;gap:12px}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.day.today{border-color:var(--fam);box-shadow:0 0 0 1px var(--fam)}
+.day h2{margin:0;display:flex;align-items:baseline;gap:8px;padding:10px 14px 6px;font-family:var(--f-display);font-weight:800;font-size:1.1rem}
+.day h2 .dd{font-family:var(--f-body);font-weight:500;font-size:.85rem;color:var(--muted)}
+.pill{margin-left:auto;font-family:var(--f-body);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fam);background:var(--fam-soft);padding:3px 8px;border-radius:99px}
+.slot{display:grid;grid-template-columns:74px 1fr;gap:8px;padding:6px 10px 6px 14px;border-top:1px dashed var(--line);min-height:50px;align-items:start;transition:background .12s}
+.slot.over{background:var(--fam-soft)}
+.slabel{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0;align-items:center;padding-block:3px}
+.chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-height:34px;padding:5px 10px;border-radius:10px;font-weight:600;font-size:.9rem;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;border:1px solid transparent;position:relative}
+.chip .cn{overflow-wrap:anywhere;min-width:0}
+.chip .ct{font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.85;flex:none}
+.chip .nt{font-size:.75rem;opacity:.7;flex:none}
+.t-family{background:var(--fam-soft);color:var(--fam)}
+.t-baby{background:var(--baby-soft);color:var(--baby)}
+.t-both{background:var(--both-soft);color:var(--both)}
+.chip.dragging-src{opacity:.3}
+.chip.insert-before{box-shadow:-4px 0 0 0 var(--ink)}
+.add{width:34px;height:34px;border-radius:10px;border:1.5px dashed var(--line);background:none;color:var(--muted);font-size:1.2rem;line-height:1}
+.ghost{position:fixed;left:0;top:0;z-index:100;pointer-events:none;box-shadow:var(--shadow);transform-origin:center;opacity:.95}
+.hint{color:var(--muted);font-size:.85rem;text-align:center;padding:4px 8px 0}
+
+/* Tray */
+#tray{position:fixed;left:0;right:0;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px));z-index:30;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 20px rgba(0,0,0,.06)}
+#tray .wrap{padding-block:8px 10px}
+.trayhead{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:2px 0;text-align:left}
+.trayhead b{font-family:var(--f-display);font-weight:800;font-size:1rem}
+.trayhead span{color:var(--muted);font-size:.8rem;flex:1}
+.trayhead i{font-style:normal;color:var(--muted);transition:transform .2s}
+#tray.closed .trayhead i{transform:rotate(180deg)}
+#tray.closed .traybody{display:none}
+.traybody{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.trayscroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.trayscroll::-webkit-scrollbar{display:none}
+.trayscroll .chip{flex:none;white-space:nowrap}
+input.search,.field input,.field textarea,.field select{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font-size:16px}
+.field textarea{min-height:84px;resize:vertical}
+
+/* Trash */
+#trash{position:fixed;left:0;right:0;top:0;z-index:90;padding:calc(env(safe-area-inset-top,0px) + 18px) 16px 18px;background:var(--danger-soft);color:var(--danger);text-align:center;font-weight:700;border-bottom:2px dashed var(--danger);transform:translateY(-110%);transition:transform .15s}
+#trash.show{transform:none}
+#trash.over{background:var(--danger);color:var(--surface)}
+
+/* Tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs .wrap{display:flex;height:var(--tab-h)}
+.tabs button{flex:1;border:0;background:none;font-weight:600;font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tabs svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabs button[aria-selected="true"]{color:var(--fam)}
+
+/* Lists (meals, groceries) */
+.panel{display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:8px;align-items:center}
+.row > input{flex:1;min-width:0}
+.primary{border:0;background:var(--fam);color:var(--surface);font-weight:700;border-radius:12px;padding:11px 16px}
+.ghostbtn{border:1px solid var(--line);background:var(--surface);font-weight:600;border-radius:12px;padding:10px 14px}
+.danger{border:1px solid var(--danger);background:none;color:var(--danger);font-weight:700;border-radius:12px;padding:10px 14px}
+.group h3{margin:0 0 6px;font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.li{display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;min-height:48px}
+.li:first-child{border-top:0}
+.li .main{flex:1;min-width:0;overflow-wrap:anywhere}
+.li .sub{display:block;font-size:.78rem;color:var(--muted)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.dot.t-family{background:var(--fam)}.dot.t-baby{background:var(--baby)}.dot.t-both{background:var(--both)}
+.check{width:24px;height:24px;border-radius:7px;border:2px solid var(--line);flex:none;display:grid;place-items:center;color:var(--surface);font-size:.85rem;font-weight:800}
+.li.done .check{background:var(--fam);border-color:var(--fam)}
+.li.done .main{text-decoration:line-through;color:var(--muted)}
+.count{font-variant-numeric:tabular-nums;font-size:.75rem;font-weight:700;color:var(--muted);background:var(--bg);padding:2px 7px;border-radius:99px}
+.x{border:0;background:none;color:var(--muted);font-size:1.2rem;width:32px;height:32px}
+.empty{color:var(--muted);text-align:center;padding:22px 16px;font-size:.92rem;background:var(--surface);border:1px dashed var(--line);border-radius:14px}
+.note{font-size:.78rem;color:var(--muted);text-align:center}
+
+/* Sheet */
+#sheetwrap{position:fixed;inset:0;z-index:60;background:rgba(10,18,22,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:20px 20px 0 0;max-height:92%;overflow-y:auto;padding:8px 16px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow);animation:up .2s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}#trash{transition:none}}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--line);margin:4px auto 10px}
+.sheet h2{font-family:var(--f-display);font-weight:800;font-size:1.3rem;margin:0 0 12px}
+.form{display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label,.lbl{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tagseg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tagseg button{border:1.5px solid var(--line);background:none;border-radius:10px;padding:9px 4px;font-weight:700;font-size:.9rem;color:var(--muted)}
+.tagseg button[aria-pressed="true"].t-family{border-color:var(--fam);background:var(--fam-soft);color:var(--fam)}
+.tagseg button[aria-pressed="true"].t-baby{border-color:var(--baby);background:var(--baby-soft);color:var(--baby)}
+.tagseg button[aria-pressed="true"].t-both{border-color:var(--both);background:var(--both-soft);color:var(--both)}
+.sugg{display:flex;flex-wrap:wrap;gap:6px}
+.sugg .chip{cursor:pointer;border:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cb{display:flex;gap:10px;align-items:center;font-size:.92rem}
+.cb input{width:20px;height:20px;accent-color:var(--fam)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions .primary{flex:1}
+#toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + 24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);z-index:95;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:.88rem;opacity:0;pointer-events:none;transition:.2s;max-width:calc(100% - 32px);text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+
+<div class="top"><div class="wrap">
+  <div class="weekrow">
+    <button class="iconbtn" id="prevWeek" aria-label="Previous week">‹</button>
+    <h1 id="weekTitle">This week<small>&nbsp;</small></h1>
+    <button class="textbtn" id="thisWeek" hidden>Today</button>
+    <button class="iconbtn" id="nextWeek" aria-label="Next week">›</button>
+  </div>
+  <div class="seg" id="filter" role="group" aria-label="Show meals for">
+    <button data-f="all" aria-pressed="true">Everyone</button>
+    <button data-f="family" aria-pressed="false">Family</button>
+    <button data-f="baby" aria-pressed="false">Baby</button>
+  </div>
+</div></div>
+
+<main id="vPlan"><div class="wrap"><div class="days" id="days"></div>
+  <p class="hint">Tap + to add a meal. Hold a meal for a moment, then drag it to move it.</p>
+</div></main>
+<main id="vMeals" hidden><div class="wrap panel" id="mealsPanel"></div></main>
+<main id="vGroc" hidden><div class="wrap panel" id="grocPanel"></div></main>
+
+<div id="tray"><div class="wrap">
+  <button class="trayhead" id="trayToggle" aria-expanded="true"><b>Saved meals</b><span>Hold one and drag it onto a day</span><i>▾</i></button>
+  <div class="traybody">
+    <div class="trayscroll" id="trayList"></div>
+  </div>
+</div></div>
+
+<div id="trash">Drop here to remove</div>
+
+<nav class="tabs"><div class="wrap" role="tablist">
+  <button role="tab" data-tab="plan" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Plan</button>
+  <button role="tab" data-tab="meals" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 13h16a8 8 0 0 1-16 0zM12 9V4M8.5 9.5 7 6M15.5 9.5 17 6"/></svg>Saved meals</button>
+  <button role="tab" data-tab="groc" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 11h10.6L20.5 7H6.6"/><circle cx="9.5" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg>Groceries</button>
+</div></nav>
+
+<div id="sheetwrap" hidden><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const SLOTS = [['b','Breakfast'],['l','Lunch'],['d','Dinner']];
+const TAGS = [['family','Family'],['baby','Baby'],['both','Both']];
+const TAGNAME = {family:'Family',baby:'Baby',both:'Both'};
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uidGen = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const norm = s => String(s || '').trim().toLowerCase();
+
+/* ---------- dates ---------- */
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const THIS_WEEK = ymd(mondayOf(new Date()));
+
+/* ---------- state ---------- */
+const STARTER = [
+  ['Overnight oats with berries','both',['Rolled oats','Milk','Yogurt','Berries']],
+  ['Scrambled eggs & toast','both',['Eggs','Bread','Butter']],
+  ['Banana pancakes','baby',['Bananas','Eggs','Rolled oats']],
+  ['Avocado toast strips','baby',['Avocado','Bread']],
+  ['Chicken tacos','family',['Chicken thighs','Tortillas','Salsa','Cheese','Lettuce']],
+  ['Turkey meatballs & pasta','both',['Ground turkey','Pasta','Marinara','Parmesan']],
+  ['Salmon, rice & broccoli','both',['Salmon','Rice','Broccoli']],
+  ['Steamed veggies & cheese cubes','baby',['Carrots','Peas','Cheddar']],
+];
+let S = { library: { meals: [], starter: false }, weeks: {}, view: { week: THIS_WEEK, tab: 'plan', filter: 'all', trayOpen: true } };
+const LS = 'familyMealPlan.v1';
+try {
+  const c = JSON.parse(localStorage.getItem(LS) || 'null');
+  if (c) { S.library = c.library || S.library; S.weeks = c.weeks || {}; if (c.view) Object.assign(S.view, c.view, { week: THIS_WEEK }); }
+} catch {}
+if (!S.library.starter && !S.library.meals.length) {
+  S.library.meals = STARTER.map(([name, tag, ing]) => ({ id: uidGen(), name, tag, ing }));
+  S.library.starter = true;
+}
+const week = (k = S.view.week) => (S.weeks[k] ||= { entries: [], checked: {}, extras: [] });
+
+/* ---------- persistence: per-person private docs, local cache as backup ---------- */
+let db = null, uid = null;
+const loaded = {}, dirty = {}, timers = {}, writing = {}, again = {};
+const docRef = k => db.collection('data/users/' + uid).doc(k);
+const weekDocKey = k => 'week-' + k;
+function cacheLocal() { try { localStorage.setItem(LS, JSON.stringify({ library: S.library, weeks: S.weeks, view: S.view })); } catch {} }
+function save(k) {
+  cacheLocal();
+  dirty[k] = true;
+  if (!db || !loaded[k]) return;
+  clearTimeout(timers[k]);
+  timers[k] = setTimeout(() => flush(k), 500);
+}
+const saveLib = () => save('library');
+const saveWeek = (wk = S.view.week) => save(weekDocKey(wk));
+function docData(k) { return k === 'library' ? S.library : week(k.slice(5)); }
+async function flush(k, retried) {
+  if (writing[k]) { again[k] = true; return; }
+  writing[k] = true;
+  try { await docRef(k).set(JSON.parse(JSON.stringify(docData(k)))); dirty[k] = false; }
+  catch (e) {
+    if (e && e.code === 'unavailable' && !retried) { writing[k] = false; setTimeout(() => flush(k, true), 800 + Math.random() * 800); return; }
+    if (e && e.code === 'quota_exceeded') toast('Storage is full. Delete old weeks or meals.');
+    else toast('Couldn’t save to your account. Saved on this phone.');
+  }
+  writing[k] = false;
+  if (again[k]) { again[k] = false; flush(k); }
+}
+async function loadDoc(k) {
+  if (!db || loaded[k] !== undefined) return;
+  loaded[k] = false;
+  try {
+    const snap = await docRef(k).get();
+    if (snap.exists && !dirty[k]) {
+      const d = JSON.parse(JSON.stringify(snap.data()));
+      if (k === 'library') S.library = Object.assign({ meals: [], starter: true }, d);
+      else S.weeks[k.slice(5)] = Object.assign({ entries: [], checked: {}, extras: [] }, d);
+      cacheLocal();
+    }
+    loaded[k] = true;
+    const hasLocal = k === 'library' ? true : (S.weeks[k.slice(5)]?.entries?.length || S.weeks[k.slice(5)]?.extras?.length);
+    if ((!snap.exists && hasLocal) || dirty[k]) flush(k);
+    render();
+  } catch { delete loaded[k]; }
+}
+(async () => {
+  const c = window.claude;
+  if (!c || !c.use) return;
+  try {
+    const [d, u] = await Promise.all([c.use('db'), c.use('user')]);
+    if (!d || !u) return;
+    const id = await u.id();
+    if (!id) return;
+    db = d; uid = id;
+    await loadDoc('library');
+    await loadDoc(weekDocKey(S.view.week));
+  } catch {}
+})();
+
+/* ---------- rendering ---------- */
+function visible(tag) { const f = S.view.filter; return f === 'all' || tag === 'both' || tag === f; }
+function chipHTML(e, kind) {
+  return `<div class="chip t-${e.tag}" data-drag="${kind}" data-id="${e.id}" role="button" tabindex="0">`
+    + `<span class="cn">${esc(e.name)}</span>${e.note ? '<span class="nt" aria-label="has note">✎</span>' : ''}<span class="ct">${TAGNAME[e.tag]}</span></div>`;
+}
+function renderHeader() {
+  const mon = parseKey(S.view.week), sun = addDays(mon, 6);
+  const range = mon.getMonth() === sun.getMonth()
+    ? `${MON[mon.getMonth()]} ${mon.getDate()} – ${sun.getDate()}`
+    : `${MON[mon.getMonth()]} ${mon.getDate()} – ${MON[sun.getMonth()]} ${sun.getDate()}`;
+  const diff = Math.round((mon - parseKey(THIS_WEEK)) / 864e5 / 7);
+  const label = diff === 0 ? 'This week' : diff === 1 ? 'Next week' : diff === -1 ? 'Last week' : `Week of ${MON[mon.getMonth()]} ${mon.getDate()}`;
+  $('#weekTitle').innerHTML = `${label}<small>${range}</small>`;
+  $('#thisWeek').hidden = diff === 0;
+  $('#filter').hidden = S.view.tab !== 'plan';
+  document.querySelectorAll('#filter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.view.filter));
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.view.tab));
+  ['prevWeek','nextWeek'].forEach(id => $('#' + id).hidden = S.view.tab === 'meals');
+  $('#thisWeek').hidden ||= S.view.tab === 'meals';
+  if (S.view.tab === 'meals') $('#weekTitle').innerHTML = `Saved meals<small>${S.library.meals.length} meals</small>`;
+}
+function renderPlan() {
+  const w = week(), mon = parseKey(S.view.week), today = ymd(new Date());
+  let html = '';
+  DAYS.forEach((dn, di) => {
+    const date = addDays(mon, di), isToday = ymd(date) === today;
+    html += `<section class="day${isToday ? ' today' : ''}"><h2>${dn}<span class="dd">${MON[date.getMonth()]} ${date.getDate()}</span>${isToday ? '<span class="pill">Today</span>' : ''}</h2>`;
+    SLOTS.forEach(([sk, sl]) => {
+      const items = w.entries.filter(e => e.day === di && e.slot === sk && visible(e.tag));
+      html += `<div class="slot" data-day="${di}" data-slot="${sk}"><div class="slabel">${sl}</div><div class="chips">`
+        + items.map(e => chipHTML(e, 'entry')).join('')
+        + `<button class="add" data-add="${di}-${sk}" aria-label="Add ${sl.toLowerCase()} on ${dn}">+</button></div></div>`;
+    });
+    html += '</section>';
+  });
+  $('#days').innerHTML = html;
+}
+function renderTray() {
+  const tray = $('#tray');
+  tray.hidden = S.view.tab !== 'plan';
+  tray.classList.toggle('closed', !S.view.trayOpen);
+  $('#trayToggle').setAttribute('aria-expanded', S.view.trayOpen);
+  const meals = [...S.library.meals].filter(m => visible(m.tag)).sort((a, b) => a.name.localeCompare(b.name));
+  $('#trayList').innerHTML = meals.length ? meals.map(m => chipHTML(m, 'lib')).join('')
+    : '<span class="note">No saved meals yet. Meals you add are saved here.</span>';
+}
+let mealQuery = '';
+function renderMeals() {
+  const q = norm(mealQuery);
+  const meals = S.library.meals.filter(m => !q || norm(m.name).includes(q)).sort((a, b) => a.name.localeCompare(b.name));
+  let html = `<div class="row"><input class="search" id="mealSearch" type="search" placeholder="Search saved meals" value="${esc(mealQuery)}" aria-label="Search saved meals"><button class="primary" id="newMeal">New meal</button></div>`;
+  if (S.library.starter && S.library.meals.length) html += `<p class="note">A few example meals are here to start. Edit or delete them anytime.</p>`;
+  let any = false;
+  TAGS.forEach(([t, tl]) => {
+    const list = meals.filter(m => m.tag === t);
+    if (!list.length) return;
+    any = true;
+    html += `<div class="group"><h3>${tl === 'Both' ? 'Both (everyone eats it)' : tl}</h3><div class="list">`
+      + list.map(m => `<button class="li" data-editlib="${m.id}"><span class="dot t-${m.tag}"></span><span class="main">${esc(m.name)}<span class="sub">${m.ing.length ? esc(m.ing.join(', ')) : 'No ingredients yet'}</span></span></button>`).join('')
+      + '</div></div>';
+  });
+  if (!any) html += `<div class="empty">${q ? 'No saved meals match that search.' : 'No saved meals yet. Tap New meal, or add a meal to a day and it is saved here.'}</div>`;
+  $('#mealsPanel').innerHTML = html;
+}
+function groceryItems() {
+  const w = week(), map = new Map();
+  [...w.entries].sort((a, b) => a.day - b.day || 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot)).forEach(e => {
+    (e.ing || []).forEach(i => {
+      const k = norm(i); if (!k) return;
+      if (!map.has(k)) map.set(k, { key: k, text: i.trim(), meals: [] });
+      map.get(k).meals.push(`${DAYS[e.day].slice(0,3)} ${e.name}`);
+    });
+  });
+  return [...map.values()];
+}
+function renderGroc() {
+  const w = week(), items = groceryItems();
+  const isDone = it => !!w.checked[it.key];
+  const sorted = [...items].sort((a, b) => isDone(a) - isDone(b) || a.text.localeCompare(b.text));
+  const extras = [...w.extras].sort((a, b) => a.done - b.done);
+  const left = items.filter(i => !isDone(i)).length + extras.filter(x => !x.done).length;
+  let html = `<div class="row"><input class="search" id="extraInput" placeholder="Add an item, like diapers or coffee" aria-label="Add grocery item" enterkeyhint="done"><button class="primary" id="addExtra">Add</button></div>`;
+  if (!items.length && !extras.length) {
+    html += `<div class="empty">Nothing on the list yet. Ingredients from this week’s meals show up here, or add items above.</div>`;
+  } else {
+    if (sorted.length) html += `<div class="group"><h3>From this week’s meals</h3><div class="list">`
+      + sorted.map(it => `<button class="li${isDone(it) ? ' done' : ''}" data-check="${esc(it.key)}"><span class="check">${isDone(it) ? '✓' : ''}</span><span class="main">${esc(it.text)}<span class="sub">${esc(it.meals.slice(0, 3).join(' · '))}${it.meals.length > 3 ? ` +${it.meals.length - 3}` : ''}</span></span>${it.meals.length > 1 ? `<span class="count">×${it.meals.length}</span>` : ''}</button>`).join('')
+      + '</div></div>';
+    if (extras.length) html += `<div class="group"><h3>Extras</h3><div class="list">`
+      + extras.map(x => `<div class="li${x.done ? ' done' : ''}"><button class="check" data-xcheck="${x.id}" aria-label="Check off ${esc(x.text)}">${x.done ? '✓' : ''}</button><span class="main">${esc(x.text)}</span><button class="x" data-xdel="${x.id}" aria-label="Remove ${esc(x.text)}">×</button></div>`).join('')
+      + '</div></div>';
+    html += `<div class="actions"><button class="primary" id="copyList">Copy list (${left} left)</button><button class="ghostbtn" id="uncheckAll">Uncheck all</button></div>`;
+  }
+  $('#grocPanel').innerHTML = html;
+}
+function render() {
+  renderHeader();
+  $('#vPlan').hidden = S.view.tab !== 'plan';
+  $('#vMeals').hidden = S.view.tab !== 'meals';
+  $('#vGroc').hidden = S.view.tab !== 'groc';
+  if (S.view.tab === 'plan') renderPlan();
+  if (S.view.tab === 'meals') renderMeals();
+  if (S.view.tab === 'groc') renderGroc();
+  renderTray();
+}
+
+/* ---------- library helpers ---------- */
+const findLib = name => S.library.meals.find(m => norm(m.name) === norm(name));
+function upsertLib(name, tag, ing) {
+  const m = findLib(name);
+  if (m) { if (ing.length) m.ing = ing; }
+  else S.library.meals.push({ id: uidGen(), name: name.trim(), tag, ing });
+  saveLib();
+}
+const parseIng = s => String(s || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2200); }
+
+/* ---------- sheet ---------- */
+let sheet = null; // {mode, day, slot, id, tag}
+function openSheet(s) { sheet = s; drawSheet(); $('#sheetwrap').hidden = false; setTimeout(() => { const n = $('#fName'); if (n && s.mode.startsWith('add')) n.focus(); }, 60); }
+function closeSheet() { sheet = null; $('#sheetwrap').hidden = true; $('#sheet').innerHTML = ''; }
+function drawSheet() {
+  const s = sheet, entryMode = s.mode === 'add-entry' || s.mode === 'edit-entry';
+  let e = { name: '', tag: S.view.filter === 'baby' ? 'baby' : 'family', ing: [], note: '' };
+  if (s.mode === 'edit-entry') e = week().entries.find(x => x.id === s.id);
+  if (s.mode === 'edit-lib') e = S.library.meals.find(x => x.id === s.id);
+  if (!e) { closeSheet(); return; }
+  s.tag ||= e.tag;
+  const title = s.mode === 'add-entry' ? `Add ${SLOTS.find(x => x[0] === s.slot)[1].toLowerCase()} · ${DAYS[s.day]}`
+    : s.mode === 'edit-entry' ? 'Edit meal' : s.mode === 'add-lib' ? 'New saved meal' : 'Edit saved meal';
+  let h = `<div class="grab"></div><h2>${esc(title)}</h2><form class="form" id="sheetForm" autocomplete="off">`;
+  h += `<div class="field"><label for="fName">Meal</label><input id="fName" value="${esc(e.name)}" placeholder="e.g. Sweet potato mash" required enterkeyhint="done"></div>`;
+  if (s.mode === 'add-entry') h += `<div class="sugg" id="sugg"></div>`;
+  h += `<div class="field"><span class="lbl">Who it’s for</span><div class="tagseg" id="fTag">`
+    + TAGS.map(([t, tl]) => `<button type="button" class="t-${t}" data-tag="${t}" aria-pressed="${s.tag === t}">${tl}</button>`).join('') + `</div></div>`;
+  if (s.mode === 'edit-entry') {
+    h += `<div class="two"><div class="field"><label for="fDay">Day</label><select id="fDay">${DAYS.map((d, i) => `<option value="${i}"${i === e.day ? ' selected' : ''}>${d}</option>`).join('')}</select></div>`
+      + `<div class="field"><label for="fSlot">Meal</label><select id="fSlot">${SLOTS.map(([k, l]) => `<option value="${k}"${k === e.slot ? ' selected' : ''}>${l}</option>`).join('')}</select></div></div>`;
+  }
+  h += `<div class="field"><label for="fIng">Ingredients for the grocery list</label><textarea id="fIng" placeholder="One per line, or separated by commas">${esc((e.ing || []).join('\n'))}</textarea></div>`;
+  if (entryMode) h += `<div class="field"><label for="fNote">Note</label><input id="fNote" value="${esc(e.note || '')}" placeholder="e.g. cut into small pieces, recipe link"></div>`;
+  if (s.mode === 'add-entry') h += `<label class="cb" id="saveLibRow"><input type="checkbox" id="fSaveLib" checked> Save to my meals</label>`;
+  h += `<div class="actions"><button class="primary" type="submit">${s.mode.startsWith('add') ? 'Add' : 'Save'}</button>`
+    + (s.mode.startsWith('edit') ? `<button class="danger" type="button" id="fDelete">Delete</button>` : `<button class="ghostbtn" type="button" id="fCancel">Cancel</button>`) + `</div>`;
+  if (s.mode === 'edit-entry') h += `<p class="note">Changes to ingredients also update this meal in Saved meals.</p>`;
+  h += '</form>';
+  $('#sheet').innerHTML = h;
+  if (s.mode === 'add-entry') drawSugg();
+}
+function drawSugg() {
+  const box = $('#sugg'); if (!box) return;
+  const q = norm($('#fName').value);
+  const list = S.library.meals.filter(m => (!q || norm(m.name).includes(q)) && norm(m.name) !== q).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 6);
+  box.innerHTML = list.map(m => `<button type="button" class="chip t-${m.tag}" data-pick="${m.id}"><span class="cn">${esc(m.name)}</span></button>`).join('');
+  const row = $('#saveLibRow'); if (row) row.hidden = !!findLib($('#fName').value);
+}
+$('#sheetwrap').addEventListener('click', ev => {
+  if (ev.target.id === 'sheetwrap') return closeSheet();
+  const t = ev.target.closest('button'); if (!t) return;
+  if (t.dataset.tag) { sheet.tag = t.dataset.tag; document.querySelectorAll('#fTag button').forEach(b => b.setAttribute('aria-pressed', b.dataset.tag === sheet.tag)); }
+  if (t.dataset.pick) {
+    const m = S.library.meals.find(x => x.id === t.dataset.pick);
+    $('#fName').value = m.name; $('#fIng').value = m.ing.join('\n'); sheet.tag = m.tag;
+    document.querySelectorAll('#fTag button').forEach(b => b.setAttribute('aria-pressed', b.dataset.tag === sheet.tag));
+    drawSugg();
+  }
+  if (t.id === 'fCancel') closeSheet();
+  if (t.id === 'fDelete') {
+    if (t.dataset.confirm) {
+      if (sheet.mode === 'edit-entry') { const w = week(); w.entries = w.entries.filter(x => x.id !== sheet.id); saveWeek(); toast('Meal removed'); }
+      else { S.library.meals = S.library.meals.filter(x => x.id !== sheet.id); saveLib(); toast('Saved meal deleted'); }
+      closeSheet(); render();
+    } else { t.dataset.confirm = '1'; t.textContent = 'Tap again to delete'; }
+  }
+});
+$('#sheetwrap').addEventListener('input', ev => { if (ev.target.id === 'fName') drawSugg(); });
+$('#sheetwrap').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const name = $('#fName').value.trim(); if (!name) return $('#fName').focus();
+  const ing = parseIng($('#fIng').value), tag = sheet.tag;
+  if (sheet.mode === 'add-entry') {
+    const note = $('#fNote').value.trim();
+    week().entries.push({ id: uidGen(), day: sheet.day, slot: sheet.slot, name, tag, ing, note });
+    saveWeek();
+    const lib = findLib(name);
+    if (lib && !ing.length) week().entries.at(-1).ing = [...lib.ing];
+    if (lib) { if (ing.length) { lib.ing = ing; saveLib(); } }
+    else if ($('#fSaveLib').checked) upsertLib(name, tag, ing);
+  } else if (sheet.mode === 'edit-entry') {
+    const e = week().entries.find(x => x.id === sheet.id), w = week();
+    const day = +$('#fDay').value, slot = $('#fSlot').value, moved = day !== e.day || slot !== e.slot;
+    Object.assign(e, { name, tag, ing, note: $('#fNote').value.trim(), day, slot });
+    if (moved) { w.entries = w.entries.filter(x => x !== e); w.entries.push(e); }
+    saveWeek();
+    const lib = findLib(name); if (lib && ing.length) { lib.ing = ing; saveLib(); }
+  } else if (sheet.mode === 'add-lib') {
+    if (findLib(name)) { toast('You already have a meal with that name'); return; }
+    S.library.meals.push({ id: uidGen(), name, tag, ing }); saveLib();
+  } else {
+    const m = S.library.meals.find(x => x.id === sheet.id);
+    Object.assign(m, { name, tag, ing }); saveLib();
+  }
+  closeSheet(); render();
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && sheet) closeSheet(); });
+
+/* ---------- clicks ---------- */
+let suppressClick = false;
+document.addEventListener('click', ev => {
+  if (suppressClick) { suppressClick = false; ev.preventDefault(); ev.stopPropagation(); return; }
+  if (ev.target.closest('#sheetwrap')) return;
+  const t = ev.target.closest('button, [data-drag]'); if (!t) return;
+  if (t.dataset.add) { const [d, s] = t.dataset.add.split('-'); openSheet({ mode: 'add-entry', day: +d, slot: s }); return; }
+  if (t.dataset.drag === 'entry') { openSheet({ mode: 'edit-entry', id: t.dataset.id }); return; }
+  if (t.dataset.drag === 'lib') { toast('Hold the meal, then drag it onto a day'); return; }
+  if (t.dataset.tab) { S.view.tab = t.dataset.tab; cacheLocal(); window.scrollTo(0, 0); render(); return; }
+  if (t.dataset.f) { S.view.filter = t.dataset.f; cacheLocal(); render(); return; }
+  if (t.id === 'prevWeek' || t.id === 'nextWeek' || t.id === 'thisWeek') {
+    S.view.week = t.id === 'thisWeek' ? THIS_WEEK : ymd(addDays(parseKey(S.view.week), t.id === 'prevWeek' ? -7 : 7));
+    window.scrollTo(0, 0); render(); loadDoc(weekDocKey(S.view.week)); return;
+  }
+  if (t.id === 'trayToggle') { S.view.trayOpen = !S.view.trayOpen; cacheLocal(); renderTray(); return; }
+  if (t.id === 'newMeal') { openSheet({ mode: 'add-lib' }); return; }
+  if (t.dataset.editlib) { openSheet({ mode: 'edit-lib', id: t.dataset.editlib }); return; }
+  const w = week();
+  if (t.dataset.check !== undefined) { const k = t.dataset.check; if (w.checked[k]) delete w.checked[k]; else w.checked[k] = true; saveWeek(); renderGroc(); return; }
+  if (t.dataset.xcheck) { const x = w.extras.find(x => x.id === t.dataset.xcheck); x.done = !x.done; saveWeek(); renderGroc(); return; }
+  if (t.dataset.xdel) { w.extras = w.extras.filter(x => x.id !== t.dataset.xdel); saveWeek(); renderGroc(); return; }
+  if (t.id === 'addExtra') { addExtra(); return; }
+  if (t.id === 'uncheckAll') { w.checked = {}; w.extras.forEach(x => x.done = false); saveWeek(); renderGroc(); return; }
+  if (t.id === 'copyList') {
+    const lines = groceryItems().filter(i => !w.checked[i.key]).map(i => '- ' + i.text).concat(w.extras.filter(x => !x.done).map(x => '- ' + x.text));
+    const text = lines.join('\n');
+    const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('List copied'); } catch { toast('Couldn’t copy. Select the items and copy them.'); } ta.remove(); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => toast('List copied'), fallback); else fallback();
+  }
+});
+function addExtra() {
+  const inp = $('#extraInput'), v = inp.value.trim(); if (!v) return;
+  week().extras.push({ id: uidGen(), text: v, done: false }); saveWeek(); renderGroc(); $('#extraInput').focus();
+}
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.id === 'extraInput') { ev.preventDefault(); addExtra(); }
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches?.('[data-drag]')) { ev.preventDefault(); ev.target.click(); }
+});
+document.addEventListener('input', ev => {
+  if (ev.target.id === 'mealSearch') { mealQuery = ev.target.value; const pos = ev.target.selectionStart; renderMeals(); const n = $('#mealSearch'); n.focus(); n.setSelectionRange(pos, pos); }
+});
+
+/* ---------- drag and drop (hold to pick up on touch) ---------- */
+let pend = null, drag = null, raf = 0;
+const HOLD_MS = 320, SLOP = 9;
+function startPending(el, x, y, touch) {
+  cancelPending();
+  pend = { el, x, y, touch, timer: touch ? setTimeout(() => beginDrag(pend.x, pend.y), HOLD_MS) : 0 };
+}
+function cancelPending() { if (pend) { clearTimeout(pend.timer); pend = null; } }
+function beginDrag(x, y) {
+  if (!pend) return;
+  const el = pend.el, r = el.getBoundingClientRect();
+  const ghost = el.cloneNode(true);
+  ghost.classList.add('ghost'); ghost.style.width = r.width + 'px';
+  document.body.appendChild(ghost);
+  drag = { kind: el.dataset.drag, id: el.dataset.id, el, ghost, ox: x - r.left, oy: y - r.top, x, y, target: null, armed: el.dataset.drag === 'entry' };
+  if (drag.kind === 'entry') { el.classList.add('dragging-src'); $('#trash').classList.add('show'); }
+  pend = null;
+  try { navigator.vibrate?.(12); } catch {}
+  moveDrag(x, y);
+  raf = requestAnimationFrame(autoScroll);
+}
+function moveDrag(x, y) {
+  drag.x = x; drag.y = y;
+  drag.ghost.style.transform = `translate(${x - drag.ox}px, ${y - drag.oy}px) scale(1.05) rotate(-2deg)`;
+  hitTest();
+}
+function clearMarks() {
+  document.querySelectorAll('.slot.over').forEach(n => n.classList.remove('over'));
+  document.querySelectorAll('.insert-before').forEach(n => n.classList.remove('insert-before'));
+  $('#trash').classList.remove('over');
+}
+function hitTest() {
+  clearMarks();
+  const n = document.elementFromPoint(drag.x, drag.y);
+  drag.target = null;
+  if (!n) return;
+  if (n.closest('#trash') && drag.kind === 'entry') { $('#trash').classList.add('over'); drag.target = { trash: true }; return; }
+  if (n.closest('#tray, .tabs')) return;
+  const slot = n.closest('.slot'); if (!slot) return;
+  slot.classList.add('over');
+  const chip = n.closest('.chip[data-drag="entry"]');
+  const before = chip && chip.dataset.id !== drag.id ? chip.dataset.id : null;
+  if (before) chip.classList.add('insert-before');
+  drag.target = { day: +slot.dataset.day, slot: slot.dataset.slot, before };
+}
+function autoScroll() {
+  if (!drag) return;
+  const tray = $('#tray'), bottomEdge = !tray.hidden ? tray.getBoundingClientRect().top : $('.tabs').getBoundingClientRect().top;
+  const topEdge = $('.top').getBoundingClientRect().bottom;
+  if (drag.y < bottomEdge - 110) drag.armed = true;
+  let dy = 0;
+  if (drag.y < topEdge + 70 && drag.y > 0) dy = -Math.max(4, (topEdge + 70 - drag.y) / 5);
+  else if (drag.armed && drag.y > bottomEdge - 70 && drag.y < bottomEdge) dy = Math.max(4, (drag.y - (bottomEdge - 70)) / 5);
+  if (dy) { window.scrollBy(0, dy); hitTest(); }
+  raf = requestAnimationFrame(autoScroll);
+}
+function endDrag(drop) {
+  cancelAnimationFrame(raf);
+  const d = drag; drag = null;
+  clearMarks();
+  d.ghost.remove(); d.el.classList.remove('dragging-src'); $('#trash').classList.remove('show');
+  suppressClick = true; setTimeout(() => suppressClick = false, 400);
+  if (!drop || !d.target) return;
+  const w = week();
+  if (d.target.trash) { w.entries = w.entries.filter(e => e.id !== d.id); saveWeek(); render(); toast('Meal removed'); return; }
+  let entry;
+  if (d.kind === 'entry') {
+    entry = w.entries.find(e => e.id === d.id); if (!entry) return;
+    if (entry.day === d.target.day && entry.slot === d.target.slot && !d.target.before) return;
+    w.entries = w.entries.filter(e => e !== entry);
+  } else {
+    const m = S.library.meals.find(x => x.id === d.id); if (!m) return;
+    entry = { id: uidGen(), name: m.name, tag: m.tag, ing: [...m.ing], note: '' };
+  }
+  entry.day = d.target.day; entry.slot = d.target.slot;
+  const idx = d.target.before ? w.entries.findIndex(e => e.id === d.target.before) : -1;
+  if (idx >= 0) w.entries.splice(idx, 0, entry); else w.entries.push(entry);
+  saveWeek(); render();
+  if (d.kind === 'lib') toast(`Added to ${DAYS[entry.day]} ${SLOTS.find(s => s[0] === entry.slot)[1].toLowerCase()}`);
+}
+// touch
+document.addEventListener('touchstart', ev => {
+  if (ev.touches.length > 1) { cancelPending(); return; }
+  const el = ev.target.closest('[data-drag]'); if (!el || ev.target.closest('#sheetwrap')) return;
+  const t = ev.touches[0]; startPending(el, t.clientX, t.clientY, true);
+}, { passive: true });
+document.addEventListener('touchmove', ev => {
+  const t = ev.touches[0];
+  if (drag) { ev.preventDefault(); moveDrag(t.clientX, t.clientY); return; }
+  if (pend && Math.hypot(t.clientX - pend.x, t.clientY - pend.y) > SLOP) cancelPending();
+}, { passive: false });
+document.addEventListener('touchend', ev => { if (drag) { ev.preventDefault(); endDrag(true); } else cancelPending(); }, { passive: false });
+document.addEventListener('touchcancel', () => { if (drag) endDrag(false); else cancelPending(); });
+document.addEventListener('contextmenu', ev => { if (ev.target.closest('[data-drag]')) ev.preventDefault(); });
+// mouse (for testing on a computer)
+document.addEventListener('mousedown', ev => {
+  if (ev.button !== 0) return;
+  const el = ev.target.closest('[data-drag]'); if (!el || ev.target.closest('#sheetwrap')) return;
+  startPending(el, ev.clientX, ev.clientY, false);
+});
+document.addEventListener('mousemove', ev => {
+  if (drag) { moveDrag(ev.clientX, ev.clientY); return; }
+  if (pend && !pend.touch && Math.hypot(ev.clientX - pend.x, ev.clientY - pend.y) > 5) beginDrag(ev.clientX, ev.clientY);
+});
+document.addEventListener('mouseup', () => { if (drag) endDrag(true); else cancelPending(); });
+
+render();
+})();
+</script>
