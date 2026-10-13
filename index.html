@@ -40,7 +40,8 @@ button{cursor:pointer}
 .weekrow h1 small{display:block;font-family:var(--f-body);font-weight:500;font-size:.8rem;color:var(--muted);letter-spacing:0}
 .iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:1.1rem;flex:none}
 .textbtn{height:40px;padding-inline:12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:.85rem}
-.seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;margin-top:10px}
+.filterrow{display:flex;gap:8px;margin-top:10px}
+.seg{flex:1;display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:7px 4px;font-weight:600;font-size:.85rem;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 
@@ -143,6 +144,17 @@ input.search,.field input,.field textarea,.field select{width:100%;border:1px so
 .cb input{width:20px;height:20px;accent-color:var(--fam)}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .actions .primary{flex:1}
+.steps{display:flex;flex-direction:column;gap:14px}
+.step{display:flex;flex-direction:column;gap:8px}
+.step p{margin:0;font-size:.9rem;color:var(--muted)}
+.step .lbl{color:var(--ink)}
+details.fmt{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+details.fmt summary{padding:9px 12px;font-weight:600;font-size:.88rem;cursor:pointer}
+details.fmt pre{margin:0;padding:0 12px 12px;white-space:pre-wrap;font:.8rem/1.45 ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink);user-select:text;-webkit-user-select:text}
+#fImport{min-height:170px;font-size:14px}
+.preview{border-radius:10px;padding:10px 12px;font-size:.88rem;background:var(--fam-soft);color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.preview.bad{background:var(--danger-soft);color:var(--danger)}
+.preview b{font-variant-numeric:tabular-nums}
 #toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + 24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);z-index:95;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:.88rem;opacity:0;pointer-events:none;transition:.2s;max-width:calc(100% - 32px);text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 </style>
@@ -154,10 +166,13 @@ input.search,.field input,.field textarea,.field select{width:100%;border:1px so
     <button class="textbtn" id="thisWeek" hidden>Today</button>
     <button class="iconbtn" id="nextWeek" aria-label="Next week">›</button>
   </div>
-  <div class="seg" id="filter" role="group" aria-label="Show meals for">
-    <button data-f="all" aria-pressed="true">Everyone</button>
-    <button data-f="family" aria-pressed="false">Family</button>
-    <button data-f="baby" aria-pressed="false">Baby</button>
+  <div class="filterrow" id="filterRow">
+    <div class="seg" id="filter" role="group" aria-label="Show meals for">
+      <button data-f="all" aria-pressed="true">Everyone</button>
+      <button data-f="family" aria-pressed="false">Family</button>
+      <button data-f="baby" aria-pressed="false">Baby</button>
+    </div>
+    <button class="textbtn" id="openImport">Import</button>
   </div>
 </div></div>
 
@@ -225,7 +240,8 @@ if (!S.library.starter && !S.library.meals.length) {
   S.library.meals = STARTER.map(([name, tag, ing]) => ({ id: uidGen(), name, tag, ing }));
   S.library.starter = true;
 }
-const week = (k = S.view.week) => (S.weeks[k] ||= { entries: [], checked: {}, extras: [] });
+const newWeek = () => ({ entries: [], checked: {}, extras: [], box: [] });
+const week = (k = S.view.week) => { const w = (S.weeks[k] ||= newWeek()); w.box ||= []; return w; };
 
 /* ---------- persistence: per-person private docs, local cache as backup ---------- */
 let db = null, uid = null;
@@ -255,22 +271,26 @@ async function flush(k, retried) {
   writing[k] = false;
   if (again[k]) { again[k] = false; flush(k); }
 }
-async function loadDoc(k) {
-  if (!db || loaded[k] !== undefined) return;
+const loadP = {};
+function loadDoc(k) {
+  if (!db) return Promise.resolve();
+  return (loadP[k] ||= loadDocOnce(k));
+}
+async function loadDocOnce(k) {
   loaded[k] = false;
   try {
     const snap = await docRef(k).get();
     if (snap.exists && !dirty[k]) {
       const d = JSON.parse(JSON.stringify(snap.data()));
       if (k === 'library') S.library = Object.assign({ meals: [], starter: true }, d);
-      else S.weeks[k.slice(5)] = Object.assign({ entries: [], checked: {}, extras: [] }, d);
+      else S.weeks[k.slice(5)] = Object.assign(newWeek(), d);
       cacheLocal();
     }
     loaded[k] = true;
-    const hasLocal = k === 'library' ? true : (S.weeks[k.slice(5)]?.entries?.length || S.weeks[k.slice(5)]?.extras?.length);
+    const hasLocal = k === 'library' ? true : (S.weeks[k.slice(5)]?.entries?.length || S.weeks[k.slice(5)]?.extras?.length || S.weeks[k.slice(5)]?.box?.length);
     if ((!snap.exists && hasLocal) || dirty[k]) flush(k);
     render();
-  } catch { delete loaded[k]; }
+  } catch { delete loaded[k]; delete loadP[k]; }
 }
 (async () => {
   const c = window.claude;
@@ -301,7 +321,7 @@ function renderHeader() {
   const label = diff === 0 ? 'This week' : diff === 1 ? 'Next week' : diff === -1 ? 'Last week' : `Week of ${MON[mon.getMonth()]} ${mon.getDate()}`;
   $('#weekTitle').innerHTML = `${label}<small>${range}</small>`;
   $('#thisWeek').hidden = diff === 0;
-  $('#filter').hidden = S.view.tab !== 'plan';
+  $('#filterRow').hidden = S.view.tab !== 'plan';
   document.querySelectorAll('#filter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.view.filter));
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.view.tab));
   ['prevWeek','nextWeek'].forEach(id => $('#' + id).hidden = S.view.tab === 'meals');
@@ -351,16 +371,23 @@ function renderMeals() {
   if (!any) html += `<div class="empty">${q ? 'No saved meals match that search.' : 'No saved meals yet. Tap New meal, or add a meal to a day and it is saved here.'}</div>`;
   $('#mealsPanel').innerHTML = html;
 }
+// "Sweet Potatoes" and "sweet potato" are the same grocery item
+const single = w => w.replace(/ies$/, 'y').replace(/(oes|ches|shes|xes)$/, m => m.slice(0, -2)).replace(/([^s])s$/, '$1');
+const itemKey = s => norm(s).replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean).map(single).join(' ');
+const inBox = (key, boxKeys) => boxKeys.some(b => b && (key === b || (' ' + key + ' ').includes(' ' + b + ' ')));
 function groceryItems() {
-  const w = week(), map = new Map();
+  const w = week(), map = new Map(), boxKeys = (w.box || []).map(itemKey), hidden = new Set();
   [...w.entries].sort((a, b) => a.day - b.day || 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot)).forEach(e => {
     (e.ing || []).forEach(i => {
-      const k = norm(i); if (!k) return;
+      const k = itemKey(i); if (!k) return;
+      if (inBox(k, boxKeys)) { hidden.add(k); return; }
       if (!map.has(k)) map.set(k, { key: k, text: i.trim(), meals: [] });
       map.get(k).meals.push(`${DAYS[e.day].slice(0,3)} ${e.name}`);
     });
   });
-  return [...map.values()];
+  const items = [...map.values()];
+  items.hidden = hidden.size;
+  return items;
 }
 function renderGroc() {
   const w = week(), items = groceryItems();
@@ -380,6 +407,9 @@ function renderGroc() {
       + '</div></div>';
     html += `<div class="actions"><button class="primary" id="copyList">Copy list (${left} left)</button><button class="ghostbtn" id="uncheckAll">Uncheck all</button></div>`;
   }
+  const n = items.hidden;
+  html += `<div class="group"><h3>Farm box this week</h3><div class="list"><button class="li" id="editBox"><span class="main">${w.box.length ? esc(w.box.join(', ')) : 'Nothing listed yet. Tap to add what came in the box.'}`
+    + `<span class="sub">${n ? `${n} ingredient${n > 1 ? 's' : ''} left off the list because ${n > 1 ? 'they’re' : 'it’s'} in the box` : 'Box items are left off the grocery list'}</span></span><span class="count">Edit</span></button></div></div>`;
   $('#grocPanel').innerHTML = html;
 }
 function render() {
@@ -409,9 +439,11 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 
 /* ---------- sheet ---------- */
 let sheet = null; // {mode, day, slot, id, tag}
-function openSheet(s) { sheet = s; drawSheet(); $('#sheetwrap').hidden = false; setTimeout(() => { const n = $('#fName'); if (n && s.mode.startsWith('add')) n.focus(); }, 60); }
+function openSheet(s) { sheet = s; drawSheet(); $('#sheetwrap').hidden = false; $('#sheet').scrollTop = 0; setTimeout(() => { const n = $('#fName'); if (n && s.mode.startsWith('add')) n.focus(); }, 60); }
 function closeSheet() { sheet = null; $('#sheetwrap').hidden = true; $('#sheet').innerHTML = ''; }
 function drawSheet() {
+  if (sheet.mode === 'import') return drawImport();
+  if (sheet.mode === 'box') return drawBox();
   const s = sheet, entryMode = s.mode === 'add-entry' || s.mode === 'edit-entry';
   let e = { name: '', tag: S.view.filter === 'baby' ? 'baby' : 'family', ing: [], note: '' };
   if (s.mode === 'edit-entry') e = week().entries.find(x => x.id === s.id);
@@ -457,6 +489,7 @@ $('#sheetwrap').addEventListener('click', ev => {
     drawSugg();
   }
   if (t.id === 'fCancel') closeSheet();
+  if (t.id === 'copyPrompt') copyText(CLAUDE_FORMAT, 'Instructions copied. Paste them into your Claude chat.');
   if (t.id === 'fDelete') {
     if (t.dataset.confirm) {
       if (sheet.mode === 'edit-entry') { const w = week(); w.entries = w.entries.filter(x => x.id !== sheet.id); saveWeek(); toast('Meal removed'); }
@@ -465,9 +498,15 @@ $('#sheetwrap').addEventListener('click', ev => {
     } else { t.dataset.confirm = '1'; t.textContent = 'Tap again to delete'; }
   }
 });
-$('#sheetwrap').addEventListener('input', ev => { if (ev.target.id === 'fName') drawSugg(); });
+$('#sheetwrap').addEventListener('input', ev => { if (ev.target.id === 'fName') drawSugg(); if (ev.target.id === 'fImport') drawPreview(); });
+$('#sheetwrap').addEventListener('change', ev => { if (ev.target.id === 'fStart' || ev.target.id === 'fReplace') drawPreview(); });
 $('#sheetwrap').addEventListener('submit', ev => {
   ev.preventDefault();
+  if (sheet.mode === 'import') return runImport();
+  if (sheet.mode === 'box') {
+    week().box = [...new Map(parseIng($('#fBox').value).map(b => [itemKey(b), b])).values()];
+    saveWeek(); closeSheet(); render(); return;
+  }
   const name = $('#fName').value.trim(); if (!name) return $('#fName').focus();
   const ing = parseIng($('#fIng').value), tag = sheet.tag;
   if (sheet.mode === 'add-entry') {
@@ -496,6 +535,155 @@ $('#sheetwrap').addEventListener('submit', ev => {
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && sheet) closeSheet(); });
 
+/* ---------- copy ---------- */
+function copyText(text, ok) {
+  const fallback = () => {
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    let done = false; try { done = document.execCommand('copy'); } catch {}
+    ta.remove(); toast(done ? ok : 'Couldn’t copy. Press and hold the text to copy it.');
+  };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => toast(ok), fallback); else fallback();
+}
+
+/* ---------- farm box sheet ---------- */
+function drawBox() {
+  const mon = parseKey(S.view.week);
+  $('#sheet').innerHTML = `<div class="grab"></div><h2>Farm box · week of ${MON[mon.getMonth()]} ${mon.getDate()}</h2><form class="form" id="sheetForm" autocomplete="off">
+    <div class="field"><label for="fBox">What came in the box</label><textarea id="fBox" placeholder="One per line, or separated by commas">${esc(week().box.join('\n'))}</textarea></div>
+    <p class="note">Ingredients that match these are left off the grocery list. “Sweet potatoes” also matches “sweet potato”.</p>
+    <div class="actions"><button class="primary" type="submit">Save</button><button class="ghostbtn" type="button" id="fCancel">Cancel</button></div></form>`;
+}
+
+/* ---------- import from Claude ---------- */
+const CLAUDE_FORMAT = `When the two-week plan is final, write it out in exactly this format so I can paste it into my meal planner app. Plain text only, no tables.
+
+WEEK 1
+FARM BOX: kale, zucchini, sweet potatoes
+Monday
+Breakfast: Meal name [Both] | ingredient, ingredient
+Lunch: Meal name [Family] | ingredient, ingredient
+Lunch: Meal name [Baby] | ingredient, ingredient | short note
+Dinner: Meal name [Both] | ingredient, ingredient
+Tuesday
+...continue through Sunday
+WEEK 2
+FARM BOX: ...
+Monday
+...continue through Sunday
+
+Rules:
+- One line per meal, starting with Breakfast:, Lunch: or Dinner:
+- Tag every meal [Family] for the two adults, [Baby] for our one-year-old, or [Both] when everyone eats it. When the baby eats something different, give the baby their own line for that meal.
+- After the | list every ingredient the meal uses, as simple grocery names without amounts (“chicken thighs”, not “1.5 lb chicken thighs, diced”). Include farm box produce too.
+- FARM BOX lists what came in that week’s box, using the same names as in the ingredients. If you don’t know week 2’s box, leave that line out.
+- An optional second | adds a short note, like a prep tip or a cooking time.`;
+
+const DAYIDX = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 };
+const DAYLINE = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)\b(.*)$/i;
+function tagFrom(s) {
+  s = norm(s);
+  if (/baby|toddler|kid|little|infant/.test(s)) return 'baby';
+  if (/both|everyone|all|whole|shared/.test(s)) return 'both';
+  if (/family|adult|grown|parent/.test(s)) return 'family';
+  return '';
+}
+function parsePlan(text) {
+  const weeks = [], skipped = [];
+  let wi = -1, day = -1, lastDay = -1;
+  const cur = () => { if (wi < 0) wi = 0; while (weeks.length <= wi) weeks.push({ entries: [], box: [] }); return weeks[wi]; };
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.replace(/^[\s>#\-–•·*]+/, '').replace(/[*_`#]+/g, '').trim();
+    if (!line) continue;
+    let m;
+    if ((m = line.match(/^week\s*(\d+)\b/i))) { wi = Math.max(0, +m[1] - 1); cur(); day = -1; lastDay = -1; continue; }
+    if ((m = line.match(/^(?:farm\s*)?box\b[^:|]*:\s*(.*)$/i))) { cur().box.push(...parseIng(m[1])); continue; }
+    if ((m = line.match(/^(breakfast|lunch|dinner|supper)\b\s*(?:\(([^)]*)\)|\[([^\]]*)\])?\s*[:\-–—]\s*(.+)$/i))) {
+      if (day < 0) { skipped.push(line); continue; }
+      const parts = m[4].split('|').map(x => x.trim());
+      let name = parts[0], tag = tagFrom(m[2] || m[3] || '');
+      const tm = name.match(/\s*[\[(]\s*(family|baby|both|everyone|all|adults?|kids?|toddler)\s*[\])]\s*/i);
+      if (tm) { tag = tagFrom(tm[1]); name = name.replace(tm[0], ' '); }
+      name = name.replace(/\s+/g, ' ').replace(/[\s:;,.\-–—]+$/, '').trim();
+      if (!name) { skipped.push(line); continue; }
+      const slot = { b: 'b', l: 'l', d: 'd', s: 'd' }[m[1][0].toLowerCase()];
+      cur().entries.push({ day, slot, name, tag: tag || 'family', ing: parseIng((parts[1] || '').replace(/^ingredients?\s*:\s*/i, '')), note: parts.slice(2).join(' · ') });
+      continue;
+    }
+    if ((m = line.match(DAYLINE)) && !m[2].includes('|') && m[2].length < 32) {
+      const d = DAYIDX[m[1].slice(0, 3).toLowerCase()];
+      if (wi < 0) wi = 0; else if (d <= lastDay) { wi++; }
+      cur(); day = d; lastDay = d; continue;
+    }
+  }
+  const used = weeks.map((w, i) => ({ ...w, index: i })).filter(w => w.entries.length || w.box.length);
+  return { weeks: used, meals: used.reduce((n, w) => n + w.entries.length, 0), skipped };
+}
+function weekRange(k) {
+  const a = parseKey(k), b = addDays(a, 6);
+  return a.getMonth() === b.getMonth() ? `${MON[a.getMonth()]} ${a.getDate()} – ${b.getDate()}` : `${MON[a.getMonth()]} ${a.getDate()} – ${MON[b.getMonth()]} ${b.getDate()}`;
+}
+const targetKey = (start, i) => ymd(addDays(parseKey(start), 7 * i));
+function drawImport() {
+  const next = ymd(addDays(parseKey(THIS_WEEK), 7)), after = ymd(addDays(parseKey(THIS_WEEK), 14));
+  const def = S.view.week !== THIS_WEEK ? S.view.week : (week(THIS_WEEK).entries.length ? next : THIS_WEEK);
+  const opts = [[THIS_WEEK, 'This week'], [next, 'Next week'], [after, 'In two weeks']];
+  if (!opts.some(o => o[0] === def)) opts.push([def, 'Week shown']);
+  $('#sheet').innerHTML = `<div class="grab"></div><h2>Import a plan from Claude</h2><form class="form steps" id="sheetForm" autocomplete="off">
+    <div class="step"><span class="lbl">1 · Ask Claude for the right format</span>
+      <p>Add these instructions to your meal plan chat. Claude will write the plan in a format the app can read.</p>
+      <button type="button" class="ghostbtn" id="copyPrompt">Copy instructions for Claude</button>
+      <details class="fmt"><summary>Show the instructions</summary><pre>${esc(CLAUDE_FORMAT)}</pre></details></div>
+    <div class="step"><label class="lbl" for="fImport">2 · Paste Claude’s plan</label>
+      <textarea id="fImport" placeholder="WEEK 1&#10;FARM BOX: kale, zucchini&#10;Monday&#10;Breakfast: Banana oat pancakes [Both] | bananas, oats, eggs&#10;…"></textarea></div>
+    <div class="step"><label class="lbl" for="fStart">3 · Start on</label>
+      <select id="fStart" class="search">${opts.map(([k, l]) => `<option value="${k}"${k === def ? ' selected' : ''}>${l} · ${weekRange(k)}</option>`).join('')}</select>
+      <label class="cb"><input type="checkbox" id="fReplace" checked> Replace meals already planned in those weeks</label>
+      <label class="cb"><input type="checkbox" id="fSaveAll" checked> Add new meals to Saved meals</label></div>
+    <div class="preview" id="preview" hidden></div>
+    <div class="actions"><button class="primary" type="submit" id="doImport" disabled>Import</button><button class="ghostbtn" type="button" id="fCancel">Cancel</button></div></form>`;
+  drawPreview();
+}
+function drawPreview() {
+  const box = $('#preview'), btn = $('#doImport'), txt = $('#fImport').value;
+  if (!txt.trim()) { box.hidden = true; btn.disabled = true; return; }
+  const p = parsePlan(txt), start = $('#fStart').value, replace = $('#fReplace').checked;
+  box.hidden = false;
+  if (!p.meals) {
+    box.className = 'preview bad'; btn.disabled = true;
+    box.innerHTML = 'No meals found. Each meal needs its own line starting with Breakfast:, Lunch: or Dinner:, under a day name like Monday. Use the instructions in step 1 so Claude writes it that way.';
+    return;
+  }
+  box.className = 'preview'; btn.disabled = false;
+  box.innerHTML = p.weeks.map((w, i) => {
+    const k = targetKey(start, i), existing = S.weeks[k]?.entries?.length || 0;
+    const tags = { family: 0, baby: 0, both: 0 }; w.entries.forEach(e => tags[e.tag]++);
+    return `<div>Week ${i + 1} → <b>${weekRange(k)}</b>: <b>${w.entries.length}</b> meals (${tags.family} family, ${tags.baby} baby, ${tags.both} both)${w.box.length ? `, <b>${w.box.length}</b> farm box items` : ''}${existing && replace ? `. Replaces ${existing} planned meal${existing > 1 ? 's' : ''}.` : ''}</div>`;
+  }).join('') + (p.skipped.length ? `<div>${p.skipped.length} meal line${p.skipped.length > 1 ? 's' : ''} came before any day name and will be skipped.</div>` : '');
+}
+async function runImport() {
+  const p = parsePlan($('#fImport').value); if (!p.meals) return;
+  const start = $('#fStart').value, replace = $('#fReplace').checked, saveAll = $('#fSaveAll').checked;
+  const keys = p.weeks.map((_, i) => targetKey(start, i));
+  $('#doImport').disabled = true; $('#doImport').textContent = 'Importing…';
+  try { await Promise.all(keys.map(k => loadDoc(weekDocKey(k)))); } catch {}
+  p.weeks.forEach((pw, i) => {
+    const w = week(keys[i]);
+    if (replace) { w.entries = []; w.checked = {}; }
+    pw.entries.forEach(e => w.entries.push({ id: uidGen(), ...e }));
+    if (pw.box.length) w.box = [...new Map((replace ? pw.box : [...w.box, ...pw.box]).map(b => [itemKey(b), b])).values()];
+    saveWeek(keys[i]);
+  });
+  if (saveAll) {
+    let added = 0;
+    p.weeks.forEach(pw => pw.entries.forEach(e => { if (!findLib(e.name)) { S.library.meals.push({ id: uidGen(), name: e.name, tag: e.tag, ing: [...e.ing] }); added++; } }));
+    if (added) saveLib();
+  }
+  closeSheet();
+  S.view.week = keys[0]; S.view.tab = 'plan'; cacheLocal(); window.scrollTo(0, 0); render();
+  toast(`Imported ${p.meals} meals into ${keys.length > 1 ? `${weekRange(keys[0]).split(' – ')[0]} – ${weekRange(keys.at(-1)).split(' – ').pop()}` : weekRange(keys[0])}`);
+}
+
 /* ---------- clicks ---------- */
 let suppressClick = false;
 document.addEventListener('click', ev => {
@@ -513,6 +701,8 @@ document.addEventListener('click', ev => {
   }
   if (t.id === 'trayToggle') { S.view.trayOpen = !S.view.trayOpen; cacheLocal(); renderTray(); return; }
   if (t.id === 'newMeal') { openSheet({ mode: 'add-lib' }); return; }
+  if (t.id === 'openImport') { openSheet({ mode: 'import' }); return; }
+  if (t.id === 'editBox') { openSheet({ mode: 'box' }); return; }
   if (t.dataset.editlib) { openSheet({ mode: 'edit-lib', id: t.dataset.editlib }); return; }
   const w = week();
   if (t.dataset.check !== undefined) { const k = t.dataset.check; if (w.checked[k]) delete w.checked[k]; else w.checked[k] = true; saveWeek(); renderGroc(); return; }
@@ -521,10 +711,8 @@ document.addEventListener('click', ev => {
   if (t.id === 'addExtra') { addExtra(); return; }
   if (t.id === 'uncheckAll') { w.checked = {}; w.extras.forEach(x => x.done = false); saveWeek(); renderGroc(); return; }
   if (t.id === 'copyList') {
-    const lines = groceryItems().filter(i => !w.checked[i.key]).map(i => '- ' + i.text).concat(w.extras.filter(x => !x.done).map(x => '- ' + x.text));
-    const text = lines.join('\n');
-    const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('List copied'); } catch { toast('Couldn’t copy. Select the items and copy them.'); } ta.remove(); };
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => toast('List copied'), fallback); else fallback();
+    const lines = [...groceryItems()].filter(i => !w.checked[i.key]).map(i => '- ' + i.text).concat(w.extras.filter(x => !x.done).map(x => '- ' + x.text));
+    copyText(lines.join('\n'), 'List copied');
   }
 });
 function addExtra() {
