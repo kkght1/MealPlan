@@ -256,7 +256,7 @@ details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0
 
 <script>
 (() => {
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const SLOTS = [['b','Breakfast'],['l','Lunch'],['d','Dinner']];
 const TAGS = [['family','Family'],['baby','Baby'],['both','Both']];
 const TAGNAME = {family:'Family',baby:'Baby',both:'Both'};
@@ -268,10 +268,11 @@ const norm = s => String(s || '').trim().toLowerCase();
 
 /* ---------- dates ---------- */
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const mondayOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+// weeks run Sunday to Saturday and are keyed by their Sunday
+const weekStartOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - x.getDay()); return x; };
 const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const THIS_WEEK = ymd(mondayOf(new Date()));
+const THIS_WEEK = ymd(weekStartOf(new Date()));
 
 /* ---------- state ---------- */
 const STARTER = [
@@ -370,8 +371,16 @@ async function loadDocOnce(k) {
   loaded[k] = false;
   try {
     let snap = await docRef(k).get(), fromOld = false;
-    if (!snap.exists && uid && (k === 'library' || k.startsWith('week-'))) {
+    if (!snap.exists && uid && k === 'library') {
       try { const o = await oldRef(k).get(); if (o.exists) { snap = o; fromOld = true; } } catch {}
+    }
+    if (!snap.exists && k.startsWith('week-')) {
+      const wk = k.slice(5), legacy = await legacyWeek(wk);
+      if (legacy) {
+        const cur = S.weeks[wk];
+        if (dirty[k] && cur) cur.entries = [...legacy.entries, ...cur.entries]; else S.weeks[wk] = legacy;
+        cacheLocal(); fromOld = true;
+      }
     }
     if (snap.exists && !dirty[k]) {
       const d = JSON.parse(JSON.stringify(snap.data()));
@@ -387,6 +396,24 @@ async function loadDocOnce(k) {
     if (fromOld || (!snap.exists && hasLocal) || dirty[k]) flush(k);
     render();
   } catch { delete loaded[k]; delete loadP[k]; }
+}
+// Earlier versions ran weeks Monday to Sunday (day 0 = Monday), keyed by the Monday, in hub/ or in
+// private per-person docs. A Sunday week takes Mon–Sat from the Monday week starting the next day,
+// and its Sunday from the Monday week that started six days before.
+async function legacyWeek(wk) {
+  const get = async key => {
+    try { const a = await docRef(key).get(); if (a.exists) return JSON.parse(JSON.stringify(a.data())); } catch {}
+    if (uid) { try { const b = await oldRef(key).get(); if (b.exists) return JSON.parse(JSON.stringify(b.data())); } catch {} }
+    return null;
+  };
+  const sun = parseKey(wk);
+  const [main, prev] = await Promise.all([get(weekDocKey(ymd(addDays(sun, 1)))), get(weekDocKey(ymd(addDays(sun, -6))))]);
+  const prevSun = (prev?.entries || []).filter(e => e.day === 6);
+  if (!main && !prevSun.length) return null;
+  const w = Object.assign(newWeek(), main || {}, { entries: [] });
+  prevSun.forEach(e => w.entries.push({ ...e, day: 0 }));
+  (main?.entries || []).filter(e => e.day <= 5).forEach(e => w.entries.push({ ...e, day: e.day + 1 }));
+  return w;
 }
 (async () => {
   const c = window.claude;
@@ -748,16 +775,16 @@ function copyText(text, ok) {
 const CLAUDE_FORMAT = `When the two-week plan is final, write it out in exactly this format so I can paste it into my meal planner app. Plain text only, no tables.
 
 WEEK 1
-Monday
+Sunday
 Breakfast: Meal name [Both] | ingredient, ingredient
 Lunch: Meal name [Family] | ingredient, ingredient
 Lunch: Meal name [Baby] | ingredient, ingredient | short note
 Dinner: Meal name [Both] | ingredient, ingredient
-Tuesday
-...continue through Sunday
-WEEK 2
 Monday
-...continue through Sunday
+...continue through Saturday
+WEEK 2
+Sunday
+...continue through Saturday
 
 Rules:
 - One line per meal, starting with Breakfast:, Lunch: or Dinner:
@@ -765,7 +792,7 @@ Rules:
 - After the | list every ingredient the meal uses, as simple grocery names without amounts (“chicken thighs”, not “1.5 lb chicken thighs, diced”).
 - An optional second | adds a short note, like a prep tip or a cooking time.`;
 
-const DAYIDX = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 };
+const DAYIDX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 const DAYLINE = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thu(?:rs?)?|fri|sat|sun)\b(.*)$/i;
 function tagFrom(s) {
   s = norm(s);
@@ -821,7 +848,7 @@ function drawImport() {
       <button type="button" class="ghostbtn" id="copyPrompt">Copy instructions for Claude</button>
       <details class="fmt"><summary>Show the instructions</summary><pre>${esc(CLAUDE_FORMAT)}</pre></details></div>
     <div class="step"><label class="lbl" for="fImport">2 · Paste Claude’s plan</label>
-      <textarea id="fImport" placeholder="WEEK 1&#10;Monday&#10;Breakfast: Banana oat pancakes [Both] | bananas, oats, eggs&#10;…"></textarea></div>
+      <textarea id="fImport" placeholder="WEEK 1&#10;Sunday&#10;Breakfast: Banana oat pancakes [Both] | bananas, oats, eggs&#10;…"></textarea></div>
     <div class="step"><label class="lbl" for="fStart">3 · Start on</label>
       <select id="fStart" class="search">${opts.map(([k, l]) => `<option value="${k}"${k === def ? ' selected' : ''}>${l} · ${weekRange(k)}</option>`).join('')}</select>
       <label class="cb"><input type="checkbox" id="fReplace" checked> Replace meals already planned in those weeks</label>
@@ -837,7 +864,7 @@ function drawPreview() {
   box.hidden = false;
   if (!p.meals) {
     box.className = 'preview bad'; btn.disabled = true;
-    box.innerHTML = 'No meals found. Each meal needs its own line starting with Breakfast:, Lunch: or Dinner:, under a day name like Monday. Use the instructions in step 1 so Claude writes it that way.';
+    box.innerHTML = 'No meals found. Each meal needs its own line starting with Breakfast:, Lunch: or Dinner:, under a day name like Sunday. Use the instructions in step 1 so Claude writes it that way.';
     return;
   }
   box.className = 'preview'; btn.disabled = false;
@@ -1121,7 +1148,7 @@ function plannerPrompt(o) {
   const slots = o.slots.map(k => slotName(k).toLowerCase() + 's').join(', ');
   return `You are planning a week of home cooking for a family of two adults and a 14-month-old toddler. The toddler is a great eater and eats what the adults eat, including leftovers, but needs low salt: cook shared dishes with little or no added salt and season the adult portions after setting the toddler's portion aside. Keep toddler safety in mind (soft textures, small pieces, quartered grapes and cherry tomatoes, no whole nuts).
 
-Week: ${weekRange(wk)} (Monday to Sunday). We live in Canada and shop at Loblaw / PC Express.
+Week: ${weekRange(wk)} (Sunday to Saturday). We live in Canada and shop at Loblaw / PC Express.
 Plan: ${slots} for all 7 days.${kept.length ? `\nAlready planned. Keep these and only fill the empty slots:\n${kept.join('\n')}` : ''}
 
 WHAT WE HAVE (use these first, especially freezer items and anything marked [low] or perishable):
@@ -1138,7 +1165,7 @@ New recipes to try this week: ${o.fresh} (set "isNew": true on them)
 Our ideas and cravings for this week: ${o.ideas ? `"${o.ideas}"` : 'none given'}
 
 GUIDELINES
-- Keep weeknight dinners realistic (most under 45 minutes). Save bigger cooks for the weekend.
+- Keep weeknight dinners realistic (most under 45 minutes). Save bigger cooks for the weekend (Sunday is day 0, Saturday is day 6).
 - Lunches should mostly be leftovers from the previous night's dinner. Name them "Leftover <dinner name>" with an empty ingredient list.
 - Breakfasts can repeat and should be quick.
 - Tags: "both" when the whole family eats it (the usual case), "family" for adults only, "baby" for a toddler-only meal. When the adults' meal is unsuitable for the toddler, add a separate "baby" meal in the same slot.
@@ -1149,7 +1176,7 @@ ${o.baby ? `- Suggest 1 or 2 toddler freezer batch-prep recipes for this week (i
 
 Reply with only JSON in exactly this shape:
 {"summary": "one or two sentences on the week's approach", "meals": [{"day": 0, "slot": "d", "name": "Meal name", "tag": "both", "ing": ["ingredient"], "note": "short tip", "isNew": false}], "babyPrep": [{"name": "Recipe name", "ing": ["ingredient"], "yield": "12 muffins", "note": "short method and freezing tip"}]}
-day is 0 for Monday through 6 for Sunday. slot is "b" for breakfast, "l" for lunch, "d" for dinner.`;
+day is 0 for Sunday, 1 for Monday, through 6 for Saturday. slot is "b" for breakfast, "l" for lunch, "d" for dinner.`;
 }
 const PLAN_ERR = {
   not_granted: 'Claude wasn’t allowed for this page. You can still plan by hand, or use Import to paste a plan from a Claude chat.',
