@@ -1046,7 +1046,7 @@ function recipeBlock(e) {
 }
 const RECIPE_LAYOUT = baby => `Plain text only, no markdown symbols like # or **. Use exactly this layout:
 
-Serves: ... · Time: ...
+${baby ? 'Makes: ... toddler portions · Time: ...' : 'Serves: ... · Time: ...'}
 
 Ingredients
 - amount ingredient
@@ -1054,8 +1054,7 @@ Ingredients
 Steps
 1. ...
 
-For the toddler
-- one to three short tips (portion, texture, cooling)
+${baby ? 'Serving tips\n- one to three short tips (portion size, texture, cooling)' : 'For the toddler\n- one to three short tips (portion, texture, cooling)'}
 ${baby ? '\nFreezing and reheating\n- how to freeze, how long it keeps, how to reheat' : '\nLeftovers\n- one short line on storing and reheating'}
 
 Shopping list: every ingredient above as simple grocery names with no amounts, comma-separated, on this one line`;
@@ -1069,9 +1068,11 @@ function kitchenAmounts(ing) {
 }
 function recipePrompt(m, baby) {
   const have = kitchenAmounts(m.ing);
-  return `Write a home-cooking recipe for "${m.name}" for a Canadian family of two adults and a 14-month-old toddler.
-${baby ? 'This is a toddler freezer batch-prep recipe: make a batch for the freezer, with no added salt, sized for the yield given.' : 'Make enough for one dinner for everyone plus one lunch of leftovers.'}
-${HOUSE}
+  return (baby ? `Write a freezer batch-prep recipe for "${m.name}" for our 14-month-old toddler ONLY. The adults won't eat it: it's made in a batch, frozen in toddler-sized portions, and reheated for the toddler's meals over the following weeks.
+No added salt or sugar at all, soft textures, small pieces, no whole nuts or other choking hazards. Don't mention adult portions or seasoning for adults. Give the number of toddler portions it makes, and portion sizes that suit a 14-month-old.`
+    : `Write a home-cooking recipe for "${m.name}" for a Canadian family of two adults and a 14-month-old toddler.
+Make enough for one dinner for everyone plus one lunch of leftovers.
+${HOUSE}`) + `
 ${(m.ing || []).length ? `Use these ingredients (add pantry basics if needed): ${m.ing.join(', ')}.` : ''}${m.note ? `\nNote from the plan: ${m.note}` : ''}${m.yield ? `\nYield: ${m.yield}` : ''}
 ${have.length ? `\nWhat we have of these (use the full amount of any meat or fish listed, scale the rest of the recipe to it, and include thawing time for anything from the freezer):\n${have.join('\n')}\n` : ''}
 ${UNITS_RULE}${S.kitchen.items.length ? `\nIn the shopping list, name things the way we do where they match: ${S.kitchen.items.slice(0, 80).map(i => i.name).join(', ')}.` : ''} ${RECIPE_LAYOUT(baby)}`;
@@ -1526,7 +1527,7 @@ GUIDELINES
 - Ingredients: simple grocery names, no amounts, using the same names as WHAT WE HAVE when it's the same thing. List every ingredient the dish needs, including ones we already have. The app subtracts what's on hand.
 - When you reuse a saved meal, use its name exactly.
 - Where an amount of meat or fish is listed in WHAT WE HAVE (e.g. 2.24 lb blade roast), size that dish to use it and say so in the note, including when to move it from the freezer to the fridge to thaw (e.g. "Uses the 2.24 lb roast. Thaw in the fridge from Thursday night").
-${o.baby ? `- Suggest 1 or 2 toddler freezer batch-prep recipes for this week (ideas: oatmeal cups, egg muffins, low-salt bolognese, veggie meatballs, fritters, muffins), favouring what's missing or low in the baby stash. Our saved baby prep recipes: ${S.baby.recipes.map(r => r.name).join('; ') || 'none'}. Reuse a saved name exactly if suggesting one.` : '- Leave babyPrep as an empty array.'}
+${o.baby ? `- Suggest 1 or 2 toddler-only freezer batch-prep recipes for this week (made just for the toddler, frozen in toddler portions, no added salt or sugar; not family meals) (ideas: oatmeal cups, egg muffins, low-salt bolognese, veggie meatballs, fritters, muffins), favouring what's missing or low in the baby stash. Our saved baby prep recipes: ${S.baby.recipes.map(r => r.name).join('; ') || 'none'}. Reuse a saved name exactly if suggesting one.` : '- Leave babyPrep as an empty array.'}
 
 Reply with only JSON in exactly this shape:
 {"summary": "one or two sentences on the week's approach", "meals": [{"day": 0, "slot": "d", "name": "Meal name", "tag": "both", "ing": ["ingredient"], "note": "short tip", "isNew": false}], "babyPrep": [{"name": "Recipe name", "ing": ["ingredient"], "yield": "12 muffins", "note": "short method and freezing tip"}]}
