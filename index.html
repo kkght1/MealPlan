@@ -202,6 +202,16 @@ details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0
 .copybox{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:.82rem/1.45 ui-monospace,"SF Mono",Menlo,monospace}
 .tabs button{font-size:.72rem}
 .chip .ck{font-weight:800;flex:none}
+.ckgrid{display:flex;flex-wrap:wrap;gap:6px}
+.ckitem{border:1.5px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 12px;font-weight:600;font-size:.88rem;color:var(--ink);min-height:36px}
+.ckitem[data-st="have"]{background:var(--fam-soft);border-color:var(--fam);color:var(--fam)}
+.ckitem[data-st="low"]{background:var(--baby-soft);border-color:var(--baby);color:var(--baby)}
+.ckitem[data-st="have"]::before{content:"✓ "}
+.ckitem[data-st="low"]::after{content:" · low"}
+.cksec{display:flex;flex-direction:column;gap:8px}
+.cksec h3{margin:6px 0 0;font-family:var(--f-display);font-weight:800;font-size:1.05rem}
+.cksec h4{margin:4px 0 0;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stickybar{position:sticky;bottom:calc(-18px - env(safe-area-inset-bottom,0px));background:var(--surface);padding:12px 0 calc(6px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);margin-top:8px}
 .field .li select.sel{width:auto;flex:none;padding:7px 8px;font-size:15px}
 .chip.cooked{opacity:.75}
 .field > label.cb{text-transform:none;letter-spacing:0;font-size:.92rem;font-weight:500;color:var(--ink);align-items:flex-start}
@@ -590,7 +600,7 @@ function renderKitchen() {
       + `<button class="stat s-${i.status}" data-kstat="${i.id}" aria-label="${esc(i.name)}: ${STATNAME[i.status]}. Tap to change">${STATNAME[i.status]}</button></div>`).join('') + '</div></div>';
   });
   if (!any) html += `<div class="empty">${q ? 'Nothing matches. Tap Add to start tracking it.' : f === 'low' ? 'Nothing is running low.' : 'Track what’s in your pantry, fridge and freezer. Items you have are left off the grocery list, and anything marked Low or Out is added to it.'}</div>`;
-  html += `<div class="actions"><button class="ghostbtn" id="kitBulk">Add several at once</button></div>`
+  html += `<div class="actions"><button class="${S.kitchen.items.length ? 'ghostbtn' : 'primary'}" id="kitStarter">Go through a pantry checklist</button><button class="ghostbtn" id="kitBulk">Type a list</button></div>`
     + `<p class="note">Tap the label to switch between Have, Low and Out.</p>`;
   $('#kitPanel').innerHTML = html;
 }
@@ -922,7 +932,61 @@ function applyUsage() {
   if (n) saveKit();
   return n;
 }
+/* ---------- pantry checklist ---------- */
+const STAPLES = {
+  pantry: {
+    'Grains & bread': 'Rice, Brown rice, Pasta, Orzo, Egg noodles, Rolled oats, Quinoa, Couscous, Breadcrumbs, Panko, Crackers, Tortillas, Bread',
+    'Baking': 'All-purpose flour, Whole wheat flour, Sugar, Brown sugar, Baking powder, Baking soda, Vanilla extract, Maple syrup, Honey, Cornstarch, Chocolate chips, Cocoa powder',
+    'Cans & jars': 'Crushed tomatoes (no salt added), Diced tomatoes, Tomato paste, Pasta sauce, Coconut milk, Chickpeas, Black beans, Kidney beans, Lentils, Canned tuna, Low-sodium chicken broth, Low-sodium vegetable broth, Unsweetened applesauce, Peanut butter',
+    'Oils, vinegars & sauces': 'Olive oil, Vegetable oil, Sesame oil, Balsamic vinegar, Apple cider vinegar, Rice vinegar, Low-sodium soy sauce, Worcestershire sauce, Fish sauce, Hot sauce',
+    'Spices & dried herbs': 'Salt, Black pepper, Garlic powder, Onion powder, Cinnamon, Cumin, Paprika, Smoked paprika, Chili powder, Curry powder, Oregano, Dried basil, Thyme, Italian seasoning, Ground ginger, Nutmeg, Bay leaves, Red pepper flakes',
+    'Onions, garlic & potatoes': 'Onions, Red onions, Garlic, Potatoes, Sweet potatoes',
+    'Toddler & snacks': 'Baby oatmeal cereal, Puffs, Teething crackers, Unsalted rice cakes, Fruit pouches, Raisins, Hemp hearts, Chia seeds, Ground flaxseed',
+  },
+  fridge: {
+    'Dairy & eggs': 'Milk, Eggs, Butter, Unsalted butter, Plain whole milk yogurt, Greek yogurt, Cheddar, Mozzarella, Parmesan, Cream cheese, Sour cream, Heavy cream',
+    'Condiments': 'Ketchup, Dijon mustard, Mayonnaise, Salsa, Pesto, Jam, Lemon juice',
+    'Long-lasting produce': 'Carrots, Celery, Lemons, Ginger',
+  },
+  freezer: {
+    'Vegetables': 'Frozen peas, Frozen corn, Frozen broccoli, Frozen spinach, Frozen mixed vegetables, Frozen green beans',
+    'Fruit': 'Frozen berries, Frozen mango, Frozen bananas',
+    'Meat & fish': 'Chicken breasts, Chicken thighs, Ground beef, Ground turkey, Salmon fillets, Shrimp, Sausages',
+    'Other': 'Frozen bread, Frozen waffles',
+  },
+};
+const guessLoc = n => /frozen|ice cream/i.test(n) ? 'freezer'
+  : /chicken|beef|pork|turkey|salmon|fish|shrimp|sausage|bacon|milk|yogurt|cheese|cheddar|mozzarella|parmesan|feta|cream|butter|egg|tofu|hummus|lettuce|spinach|herb|cilantro|parsley|berries|grapes/i.test(n) ? 'fridge' : 'pantry';
+function starterSections() {
+  const seen = new Set(), secs = [];
+  LOCS.forEach(([loc, ll]) => Object.entries(STAPLES[loc]).forEach(([grp, list]) => {
+    const items = list.split(', ').filter(n => { const c = coreKey(n); if (seen.has(c)) return false; seen.add(c); return true; });
+    secs.push({ loc, ll, grp, items });
+  }));
+  // ingredients from saved meals that the starter list doesn't cover, most used first
+  const count = new Map();
+  S.library.meals.forEach(m => (m.ing || []).forEach(i => { const c = coreKey(i); if (!c || seen.has(c)) return; const e = count.get(c) || { name: i.trim(), n: 0 }; e.n++; count.set(c, e); }));
+  const mine = [...count.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name)).slice(0, 40).map(e => e.name);
+  if (mine.length) secs.unshift({ loc: null, ll: 'From your saved meals', grp: 'Ingredients you cook with', items: mine });
+  return secs;
+}
 const EXTRA_SHEETS = {
+  kstarter() {
+    const secs = starterSections(); sheet.st = {};
+    let h = `<div class="grab"></div><h2>Pantry checklist</h2><form class="form" id="sheetForm" autocomplete="off">
+      <p class="note" style="text-align:left">Tap what you have. Tap again if it’s running low, and a third time to clear it. Items you already track show their current status.</p>`;
+    let lastLL = '';
+    secs.forEach((sec, si) => {
+      if (sec.ll !== lastLL) { h += `${lastLL ? '</div>' : ''}<div class="cksec"><h3>${esc(sec.ll)}</h3>`; lastLL = sec.ll; }
+      h += `<h4>${esc(sec.grp)}</h4><div class="ckgrid">` + sec.items.map((n, i) => {
+        const k = kitchenMatch(n), st = k && k.status !== 'out' ? k.status : '', id = `${si}-${i}`;
+        sheet.st[id] = { name: k ? k.name : n, loc: sec.loc || guessLoc(n), kit: k ? k.id : null, st };
+        return `<button type="button" class="ckitem" data-ck="${id}" data-st="${st}" aria-pressed="${!!st}">${esc(k ? k.name : n)}</button>`;
+      }).join('') + '</div>';
+    });
+    h += `</div><div class="stickybar actions"><button class="primary" type="submit" id="ckSave">Save to kitchen</button><button class="ghostbtn" type="button" id="fCancel">Cancel</button></div></form>`;
+    sh(h); updateCkCount();
+  },
   cooked() {
     const e = week().entries.find(x => x.id === sheet.id); if (!e) return closeSheet();
     sh(form(`Cooked ${e.name}`, usageFields(e.ing), 'Done'));
@@ -1008,7 +1072,23 @@ const PC_PROMPT = `Please fill my PC Express cart from the grocery list below.
 
 Grocery list:`;
 
+function updateCkCount() {
+  const n = Object.values(sheet.st || {}).filter(x => x.st).length, b = $('#ckSave');
+  if (b) b.textContent = n ? `Save ${n} item${n > 1 ? 's' : ''} to kitchen` : 'Save to kitchen';
+}
 const EXTRA_SUBMIT = {
+  kstarter() {
+    let added = 0, changed = 0;
+    Object.values(sheet.st).forEach(x => {
+      if (x.kit) {
+        const k = S.kitchen.items.find(i => i.id === x.kit); if (!k) return;
+        const want = x.st || 'out';
+        if (k.status !== want) { k.status = want; changed++; }
+      } else if (x.st) { S.kitchen.items.push({ id: uidGen(), name: x.name, loc: x.loc, status: x.st, qty: '', pc: '' }); added++; }
+    });
+    saveKit(); closeSheet(); S.view.kfilter = 'all'; render();
+    toast(`Kitchen updated: ${added} added${changed ? `, ${changed} changed` : ''}`);
+  },
   cooked() {
     const e = week().entries.find(x => x.id === sheet.id); if (!e) return closeSheet();
     e.cooked = true; const n = applyUsage(); saveWeek(); closeSheet(); render();
@@ -1087,6 +1167,10 @@ function extraSheetClick(t) {
     if (sheet.mode === 'stash') { S.baby.stash = S.baby.stash.filter(x => x.id !== sheet.id); saveBaby(); }
     if (sheet.mode === 'brecipe') { S.baby.recipes = S.baby.recipes.filter(x => x.id !== sheet.id); saveBaby(); }
     closeSheet(); render(); toast('Deleted'); return true;
+  }
+  if (t.dataset.ck) {
+    const x = sheet.st[t.dataset.ck]; x.st = { '': 'have', have: 'low', low: '' }[x.st];
+    t.dataset.st = x.st; t.setAttribute('aria-pressed', !!x.st); updateCkCount(); return true;
   }
   if (t.id === 'copyPcPrompt') { copyText(sheet.prompt, 'Copied. Paste it into Claude in Chrome.'); return true; }
   if (t.id === 'copyPlain') { copyText(sheet.list, 'List copied'); return true; }
@@ -1269,6 +1353,7 @@ document.addEventListener('click', ev => {
   if (t.dataset.kf) { S.view.kfilter = t.dataset.kf; cacheLocal(); render(); return; }
   if (t.id === 'kitAdd') { addKitchen(); return; }
   if (t.id === 'kitBulk') { openSheet({ mode: 'kbulk' }); return; }
+  if (t.id === 'kitStarter') { openSheet({ mode: 'kstarter' }); return; }
   if (t.dataset.kedit) { openSheet({ mode: 'kitem', id: t.dataset.kedit }); return; }
   if (t.dataset.kstat) { const i = S.kitchen.items.find(x => x.id === t.dataset.kstat); i.status = { have: 'low', low: 'out', out: 'have' }[i.status] || 'have'; saveKit(); render(); return; }
   if (t.id === 'addStash') { openSheet({ mode: 'stash' }); return; }
