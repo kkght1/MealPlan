@@ -201,6 +201,9 @@ details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .copybox{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:.82rem/1.45 ui-monospace,"SF Mono",Menlo,monospace}
 .tabs button{font-size:.72rem}
+.chip .ck{font-weight:800;flex:none}
+.field .li select.sel{width:auto;flex:none;padding:7px 8px;font-size:15px}
+.chip.cooked{opacity:.75}
 .field > label.cb{text-transform:none;letter-spacing:0;font-size:.92rem;font-weight:500;color:var(--ink);align-items:flex-start}
 .field > label.cb input{margin-top:1px;flex:none}
 </style>
@@ -406,8 +409,9 @@ const shortDate = k => { const d = parseKey(k); return `${MON[d.getMonth()]} ${d
 function visible(tag) { const f = S.view.filter; return f === 'all' || tag === 'both' || tag === f; }
 function chipHTML(e, kind) {
   const fav = kind === 'lib' ? e.fav : findLib(e.name)?.fav;
-  return `<div class="chip t-${e.tag}" data-drag="${kind}" data-id="${e.id}" role="button" tabindex="0">`
+  return `<div class="chip t-${e.tag}${kind === 'entry' && e.cooked ? ' cooked' : ''}" data-drag="${kind}" data-id="${e.id}" role="button" tabindex="0">`
     + (fav ? '<span class="fv" aria-label="in rotation">★</span>' : '')
+    + (kind === 'entry' && e.cooked ? '<span class="ck" aria-label="cooked">✓</span>' : '')
     + `<span class="cn">${esc(e.name)}</span>${e.note ? '<span class="nt" aria-label="has note">✎</span>' : ''}<span class="ct">${TAGNAME[e.tag]}</span></div>`;
 }
 function renderHeader() {
@@ -476,17 +480,15 @@ function renderMeals() {
 // "Sweet Potatoes" and "sweet potato" are the same grocery item
 const single = w => w.replace(/ies$/, 'y').replace(/(oes|ches|shes|xes)$/, m => m.slice(0, -2)).replace(/([^s])s$/, '$1');
 const itemKey = s => norm(s).replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean).map(single).join(' ');
-const inBox = (key, boxKeys) => boxKeys.some(b => b && (key === b || (' ' + key + ' ').includes(' ' + b + ' ')));
 // "frozen chicken thighs" in the freezer covers "chicken thighs" in a recipe
 const QUAL = /\b(fresh|frozen|organic|canned|dried|dry|bag|box|can|jar|tin|of|pc|large|small|whole|raw|plain|unsalted|low sodium|no salt added|boneless|skinless)\b/g;
 const coreKey = s => itemKey(s).replace(QUAL, ' ').replace(/\s+/g, ' ').trim();
 function kitchenMatch(text) { const c = coreKey(text); return c ? S.kitchen.items.find(i => coreKey(i.name) === c) || null : null; }
 const prefFor = it => (it.kit && it.kit.pc) || S.kitchen.prefs[itemKey(it.text)] || '';
 function groceryData(wk = S.view.week) {
-  const w = week(wk), boxKeys = w.box.map(itemKey), map = new Map(), boxed = new Set();
+  const w = week(wk), map = new Map();
   const add = (i, label) => {
     const k = itemKey(i); if (!k) return;
-    if (inBox(k, boxKeys)) { boxed.add(k); return; }
     if (!map.has(k)) map.set(k, { key: k, text: i.trim(), meals: [] });
     map.get(k).meals.push(label);
   };
@@ -502,7 +504,7 @@ function groceryData(wk = S.view.week) {
   const used = new Set([...list, ...onHand].map(it => it.kit).filter(Boolean));
   const restock = S.kitchen.items.filter(i => i.status !== 'have' && !used.has(i))
     .map(i => ({ key: 'k:' + i.id, text: i.name, kit: i, low: i.status, meals: [] }));
-  return { list, onHand, restock, boxed: boxed.size };
+  return { list, onHand, restock };
 }
 function grocRow(it, w) {
   const done = !!w.checked[it.key], pref = prefFor(it);
@@ -534,9 +536,6 @@ function renderGroc() {
   if (g.onHand.length) html += `<details class="onhand"><summary>Already have ${g.onHand.length} item${g.onHand.length > 1 ? 's' : ''} for this week’s meals</summary><div class="list">`
     + g.onHand.sort((a, b) => a.text.localeCompare(b.text)).map(it => `<div class="li"><span class="main">${esc(it.text)}<span class="sub">${it.kit ? `In the ${it.kit.loc}${it.kit.qty ? ' · ' + esc(it.kit.qty) : ''}` : 'You said you have it'}</span></span><button class="mini" data-needit="${esc(it.key)}">Buy anyway</button></div>`).join('')
     + '</div></details>';
-  const n = g.boxed;
-  html += `<div class="group"><h3>Farm box this week</h3><div class="list"><button class="li" id="editBox"><span class="main">${w.box.length ? esc(w.box.join(', ')) : 'Nothing listed yet. Tap to add what came in the box.'}`
-    + `<span class="sub">${n ? `${n} ingredient${n > 1 ? 's' : ''} left off the list because ${n > 1 ? 'they’re' : 'it’s'} in the box` : 'Box items are left off the grocery list'}</span></span><span class="count">Edit</span></button></div></div>`;
   $('#grocPanel').innerHTML = html;
 }
 function shoppingLines(withPrefs) {
@@ -635,7 +634,6 @@ function openSheet(s) { sheet = s; drawSheet(); $('#sheetwrap').hidden = false; 
 function closeSheet() { try { sheet?.ctl?.abort(); } catch {} sheet = null; $('#sheetwrap').hidden = true; $('#sheet').innerHTML = ''; }
 function drawSheet() {
   if (sheet.mode === 'import') return drawImport();
-  if (sheet.mode === 'box') return drawBox();
   if (EXTRA_SHEETS[sheet.mode]) return EXTRA_SHEETS[sheet.mode]();
   const s = sheet, entryMode = s.mode === 'add-entry' || s.mode === 'edit-entry';
   let e = { name: '', tag: S.view.filter === 'baby' ? 'baby' : 'family', ing: [], note: '' };
@@ -663,6 +661,7 @@ function drawSheet() {
   h += `<label class="cb"><input type="checkbox" id="fFav"${libM?.fav ? ' checked' : ''}> ★ Keep in the rotation</label>`;
   h += `<div class="actions"><button class="primary" type="submit">${s.mode.startsWith('add') ? 'Add' : 'Save'}</button>`
     + (s.mode.startsWith('edit') ? `<button class="danger" type="button" id="fDelete">Delete</button>` : `<button class="ghostbtn" type="button" id="fCancel">Cancel</button>`) + `</div>`;
+  if (s.mode === 'edit-entry' && (e.ing || []).length) h += `<button class="ghostbtn" type="button" id="fCooked">${e.cooked ? 'Cooked ✓ · update kitchen again' : 'We cooked this · update the kitchen'}</button>`;
   if (s.mode === 'edit-entry') h += `<p class="note">Changes to ingredients also update this meal in Saved meals.</p>`;
   h += '</form>';
   $('#sheet').innerHTML = h;
@@ -686,6 +685,7 @@ $('#sheetwrap').addEventListener('click', ev => {
     drawSugg();
   }
   if (t.id === 'fCancel') closeSheet();
+  if (t.id === 'fCooked') { openSheet({ mode: 'cooked', id: sheet.id }); return; }
   if (extraSheetClick(t)) return;
   if (t.id === 'copyPrompt') copyText(CLAUDE_FORMAT, 'Instructions copied. Paste them into your Claude chat.');
   if (t.id === 'fDelete') {
@@ -702,10 +702,6 @@ $('#sheetwrap').addEventListener('submit', ev => {
   ev.preventDefault();
   if (sheet.mode === 'import') return runImport();
   if (EXTRA_SUBMIT[sheet.mode]) return EXTRA_SUBMIT[sheet.mode]();
-  if (sheet.mode === 'box') {
-    week().box = [...new Map(parseIng($('#fBox').value).map(b => [itemKey(b), b])).values()];
-    saveWeek(); closeSheet(); render(); return;
-  }
   const name = $('#fName').value.trim(); if (!name) return $('#fName').focus();
   const ing = parseIng($('#fIng').value), tag = sheet.tag;
   if (sheet.mode === 'add-entry') {
@@ -748,20 +744,10 @@ function copyText(text, ok) {
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => toast(ok), fallback); else fallback();
 }
 
-/* ---------- farm box sheet ---------- */
-function drawBox() {
-  const mon = parseKey(S.view.week);
-  $('#sheet').innerHTML = `<div class="grab"></div><h2>Farm box · week of ${MON[mon.getMonth()]} ${mon.getDate()}</h2><form class="form" id="sheetForm" autocomplete="off">
-    <div class="field"><label for="fBox">What came in the box</label><textarea id="fBox" placeholder="One per line, or separated by commas">${esc(week().box.join('\n'))}</textarea></div>
-    <p class="note">Ingredients that match these are left off the grocery list. “Sweet potatoes” also matches “sweet potato”.</p>
-    <div class="actions"><button class="primary" type="submit">Save</button><button class="ghostbtn" type="button" id="fCancel">Cancel</button></div></form>`;
-}
-
 /* ---------- import from Claude ---------- */
 const CLAUDE_FORMAT = `When the two-week plan is final, write it out in exactly this format so I can paste it into my meal planner app. Plain text only, no tables.
 
 WEEK 1
-FARM BOX: kale, zucchini, sweet potatoes
 Monday
 Breakfast: Meal name [Both] | ingredient, ingredient
 Lunch: Meal name [Family] | ingredient, ingredient
@@ -770,15 +756,13 @@ Dinner: Meal name [Both] | ingredient, ingredient
 Tuesday
 ...continue through Sunday
 WEEK 2
-FARM BOX: ...
 Monday
 ...continue through Sunday
 
 Rules:
 - One line per meal, starting with Breakfast:, Lunch: or Dinner:
 - Tag every meal [Family] for the two adults, [Baby] for our one-year-old, or [Both] when everyone eats it. When the baby eats something different, give the baby their own line for that meal.
-- After the | list every ingredient the meal uses, as simple grocery names without amounts (“chicken thighs”, not “1.5 lb chicken thighs, diced”). Include farm box produce too.
-- FARM BOX lists what came in that week’s box, using the same names as in the ingredients. If you don’t know week 2’s box, leave that line out.
+- After the | list every ingredient the meal uses, as simple grocery names without amounts (“chicken thighs”, not “1.5 lb chicken thighs, diced”).
 - An optional second | adds a short note, like a prep tip or a cooking time.`;
 
 const DAYIDX = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 };
@@ -837,7 +821,7 @@ function drawImport() {
       <button type="button" class="ghostbtn" id="copyPrompt">Copy instructions for Claude</button>
       <details class="fmt"><summary>Show the instructions</summary><pre>${esc(CLAUDE_FORMAT)}</pre></details></div>
     <div class="step"><label class="lbl" for="fImport">2 · Paste Claude’s plan</label>
-      <textarea id="fImport" placeholder="WEEK 1&#10;FARM BOX: kale, zucchini&#10;Monday&#10;Breakfast: Banana oat pancakes [Both] | bananas, oats, eggs&#10;…"></textarea></div>
+      <textarea id="fImport" placeholder="WEEK 1&#10;Monday&#10;Breakfast: Banana oat pancakes [Both] | bananas, oats, eggs&#10;…"></textarea></div>
     <div class="step"><label class="lbl" for="fStart">3 · Start on</label>
       <select id="fStart" class="search">${opts.map(([k, l]) => `<option value="${k}"${k === def ? ' selected' : ''}>${l} · ${weekRange(k)}</option>`).join('')}</select>
       <label class="cb"><input type="checkbox" id="fReplace" checked> Replace meals already planned in those weeks</label>
@@ -860,7 +844,7 @@ function drawPreview() {
   box.innerHTML = p.weeks.map((w, i) => {
     const k = targetKey(start, i), existing = S.weeks[k]?.entries?.length || 0;
     const tags = { family: 0, baby: 0, both: 0 }; w.entries.forEach(e => tags[e.tag]++);
-    return `<div>Week ${i + 1} → <b>${weekRange(k)}</b>: <b>${w.entries.length}</b> meals (${tags.family} family, ${tags.baby} baby, ${tags.both} both)${w.box.length ? `, <b>${w.box.length}</b> farm box items` : ''}${existing && replace ? `. Replaces ${existing} planned meal${existing > 1 ? 's' : ''}.` : ''}</div>`;
+    return `<div>Week ${i + 1} → <b>${weekRange(k)}</b>: <b>${w.entries.length}</b> meals (${tags.family} family, ${tags.baby} baby, ${tags.both} both)${existing && replace ? `. Replaces ${existing} planned meal${existing > 1 ? 's' : ''}.` : ''}</div>`;
   }).join('') + (p.skipped.length ? `<div>${p.skipped.length} meal line${p.skipped.length > 1 ? 's' : ''} came before any day name and will be skipped.</div>` : '');
 }
 async function runImport() {
@@ -873,7 +857,6 @@ async function runImport() {
     const w = week(keys[i]);
     if (replace) { w.entries = []; w.checked = {}; }
     pw.entries.forEach(e => w.entries.push({ id: uidGen(), ...e }));
-    if (pw.box.length) w.box = [...new Map((replace ? pw.box : [...w.box, ...pw.box]).map(b => [itemKey(b), b])).values()];
     saveWeek(keys[i]);
   });
   if (saveAll) {
@@ -896,9 +879,29 @@ const STATS = [['have','Have it'],['low','Running low'],['out','Out']];
 const sh = html => { $('#sheet').innerHTML = html; };
 const allGroc = () => { const g = groceryData(); return [...g.list, ...g.restock, ...g.onHand]; };
 
+// after cooking, ask what's left of the tracked kitchen items a recipe used
+function usageFields(ing) {
+  const seen = new Set(), items = [];
+  (ing || []).forEach(i => { const k = kitchenMatch(i); if (k && k.status !== 'out' && !seen.has(k.id)) { seen.add(k.id); items.push(k); } });
+  if (!items.length) return `<p class="note" style="text-align:left">None of the ingredients are tracked in the Kitchen, so there’s nothing to update.</p>`;
+  return `<div class="field"><span class="lbl">What’s left in the kitchen?</span><div class="list">`
+    + items.map(k => `<div class="li"><span class="main">${esc(k.name)}<span class="sub">${LOCS.find(l => l[0] === k.loc)[1]}${k.qty ? ' · ' + esc(k.qty) : ''}</span></span>`
+      + `<select class="sel" data-use="${k.id}" aria-label="${esc(k.name)}">${[['have','Still have'],['low','Running low'],['out','Used up']].map(([v, l]) => `<option value="${v}"${v === k.status ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')
+    + `</div><p class="note" style="text-align:left">Running low and Used up items go on the grocery list.</p></div>`;
+}
+function applyUsage() {
+  let n = 0;
+  document.querySelectorAll('[data-use]').forEach(sel => { const k = S.kitchen.items.find(x => x.id === sel.dataset.use); if (k && k.status !== sel.value) { k.status = sel.value; n++; } });
+  if (n) saveKit();
+  return n;
+}
 const EXTRA_SHEETS = {
+  cooked() {
+    const e = week().entries.find(x => x.id === sheet.id); if (!e) return closeSheet();
+    sh(form(`Cooked ${e.name}`, usageFields(e.ing), 'Done'));
+  },
   ideas() {
-    sh(form('Ideas for this week', fieldTa('fIdeas', 'What are you in the mood for?', week().ideas, 'e.g. Something with the squash from the box. Want to try a new curry. Busy Wednesday, so slow cooker. Use up the frozen shrimp.')
+    sh(form('Ideas for this week', fieldTa('fIdeas', 'What are you in the mood for?', week().ideas, 'e.g. Something with the squash on the counter. Want to try a new curry. Busy Wednesday, so slow cooker. Use up the frozen shrimp.')
       + `<p class="note" style="text-align:left">${sampleFn ? 'When you tap ✦ Plan, Claude builds the week around these ideas, what’s in the kitchen and your rotation.' : 'These notes stay with this week.'}</p>`));
   },
   kitem() {
@@ -929,7 +932,7 @@ const EXTRA_SHEETS = {
   made() {
     const r = S.baby.recipes.find(x => x.id === sheet.id); if (!r) return closeSheet();
     const n = parseInt(r.yield, 10) || 8;
-    sh(form(`Made ${r.name}`, `<div class="two">${fieldIn('mPortions', 'Portions going in the freezer', n, '', 'number')}${fieldIn('mMade', 'Made on', ymd(new Date()), '', 'date')}</div>`, 'Add to freezer stash'));
+    sh(form(`Made ${r.name}`, `<div class="two">${fieldIn('mPortions', 'Portions going in the freezer', n, '', 'number')}${fieldIn('mMade', 'Made on', ymd(new Date()), '', 'date')}</div>` + usageFields(r.ing), 'Add to freezer stash'));
   },
   gitem() {
     const it = allGroc().find(x => x.key === sheet.key); if (!it) return closeSheet();
@@ -979,6 +982,11 @@ const PC_PROMPT = `Please fill my PC Express cart from the grocery list below.
 Grocery list:`;
 
 const EXTRA_SUBMIT = {
+  cooked() {
+    const e = week().entries.find(x => x.id === sheet.id); if (!e) return closeSheet();
+    e.cooked = true; const n = applyUsage(); saveWeek(); closeSheet(); render();
+    toast(n ? `Kitchen updated (${n} item${n > 1 ? 's' : ''})` : 'Marked as cooked');
+  },
   ideas() { week().ideas = $('#fIdeas').value.trim(); saveWeek(); closeSheet(); render(); },
   kitem() {
     const name = $('#kName').value.trim(); if (!name) return $('#kName').focus();
@@ -1016,6 +1024,7 @@ const EXTRA_SUBMIT = {
   made() {
     const r = S.baby.recipes.find(x => x.id === sheet.id), n = Math.max(0, parseInt($('#mPortions').value, 10) || 0);
     if (n) S.baby.stash.push({ id: uidGen(), name: r.name, portions: n, made: $('#mMade').value || ymd(new Date()) });
+    applyUsage();
     week().prepDone[r.id] = true; saveWeek(); saveBaby(); closeSheet(); render();
     toast(n ? `${n} portions of ${r.name} added to the freezer stash` : 'Marked as made');
   },
@@ -1074,7 +1083,7 @@ function drawPlanner() {
       + fieldSel('plFresh', 'New recipes to try', [0, 1, 2, 3, 4].map(n => [String(n), n === 0 ? 'None, just our favourites' : `${n} new`]), String(o.fresh))
       + (w.entries.length ? `<label class="cb"><input type="checkbox" id="plKeep"${o.keep ? ' checked' : ''}> Keep the ${w.entries.length} meal${w.entries.length > 1 ? 's' : ''} already planned</label>` : '')
       + `<label class="cb"><input type="checkbox" id="plBaby"${o.baby ? ' checked' : ''}> Suggest baby freezer prep</label>`
-      + `<p class="note" style="text-align:left">Claude sees ${kc} kitchen item${kc === 1 ? '' : 's'}, ${favs} rotation favourite${favs === 1 ? '' : 's'}, the farm box and the baby stash. It cooks low-salt for your toddler. This uses your Claude usage and takes about a minute.</p>`,
+      + `<p class="note" style="text-align:left">Claude sees ${kc} kitchen item${kc === 1 ? '' : 's'}, ${favs} rotation favourite${favs === 1 ? '' : 's'} and the baby stash. It cooks low-salt for your toddler. This uses your Claude usage and takes about a minute.</p>`,
       'Make my plan'));
     return;
   }
@@ -1119,7 +1128,6 @@ WHAT WE HAVE (use these first, especially freezer items and anything marked [low
 Pantry: ${kit('pantry')}
 Fridge: ${kit('fridge')}
 Freezer: ${kit('freezer')}
-Farm box produce this week: ${w.box.join(', ') || 'none listed'}
 Baby freezer stash (ready-made toddler portions; use them for toddler meals when the adults eat something unsuitable): ${stash.join('; ') || 'empty'}
 
 OUR ROTATION (meals we love; include several, favouring ones not planned recently):
@@ -1253,7 +1261,6 @@ document.addEventListener('click', ev => {
   if (t.dataset.needit) { const w = week(); w.need[t.dataset.needit] = true; delete w.have[t.dataset.needit]; saveWeek(); render(); return; }
   if (t.id === 'openPC') { openSheet({ mode: 'pc' }); return; }
   if (t.id === 'putAway') { openSheet({ mode: 'putaway' }); return; }
-  if (t.id === 'editBox') { openSheet({ mode: 'box' }); return; }
   if (t.dataset.editlib) { openSheet({ mode: 'edit-lib', id: t.dataset.editlib }); return; }
   const w = week();
   if (t.dataset.check !== undefined) { const k = t.dataset.check; if (w.checked[k]) delete w.checked[k]; else w.checked[k] = true; saveWeek(); renderGroc(); return; }
