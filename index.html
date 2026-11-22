@@ -202,6 +202,12 @@ details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0
 .copybox{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:.82rem/1.45 ui-monospace,"SF Mono",Menlo,monospace}
 .tabs button{font-size:.72rem}
 .chip .ck{font-weight:800;flex:none}
+.banner{display:flex;align-items:center;gap:12px;background:var(--both-soft);border-radius:14px;padding:12px 14px}
+.banner > div:not(.spin){flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.banner b{font-size:.95rem}
+.banner span{font-size:.84rem;color:var(--muted);overflow-wrap:anywhere}
+.banner.warnb{background:var(--baby-soft)}
+.banner .primary{padding:9px 12px;flex:none}
 .pm.pick{cursor:pointer;align-items:flex-start;padding:5px 0}
 .pm.pick input{width:20px;height:20px;accent-color:var(--fam);flex:none;margin:1px 0 0}
 .pm.off .n{color:var(--muted);text-decoration:line-through}
@@ -482,7 +488,10 @@ function renderHeader() {
 }
 function renderPlan() {
   const w = week(), mon = parseKey(S.view.week), today = ymd(new Date());
-  let html = `<button class="ideas${w.ideas ? ' has' : ''}" id="editIdeas"><b>Ideas for this week</b><span>${w.ideas ? esc(w.ideas) : 'Cravings, recipes to try, what needs using up, busy nights… Tap to jot them down.'}</span></button>`;
+  let html = '';
+  if (recipeJob?.running && recipeJob.wk === S.view.week) html += `<div class="banner"><div class="spin"></div><div><b>Writing recipes for your dinners</b><span>${recipeJob.done} of ${recipeJob.total} done. Keep using the app; the grocery list updates when they’re ready.</span></div></div>`;
+  else if (sampleFn && !w.noRecipeNag) { const n = dinnersMissing(w).length; if (n) html += `<div class="banner"><div><b>${n} dinner${n > 1 ? 's' : ''} without a recipe</b><span>Claude can write ${n > 1 ? 'them' : 'it'} and update the grocery list.</span></div><button class="mini" id="preloadRecipes">Write ${n > 1 ? 'them' : 'it'}</button><button class="x" id="hideRecipeNag" aria-label="Hide this">×</button></div>`; }
+  html += `<button class="ideas${w.ideas ? ' has' : ''}" id="editIdeas"><b>Ideas for this week</b><span>${w.ideas ? esc(w.ideas) : 'Cravings, recipes to try, what needs using up, busy nights… Tap to jot them down.'}</span></button>`;
   DAYS.forEach((dn, di) => {
     const date = addDays(mon, di), isToday = ymd(date) === today;
     html += `<section class="day${isToday ? ' today' : ''}"><h2>${dn}<span class="dd">${MON[date.getMonth()]} ${date.getDate()}</span>${isToday ? '<span class="pill">Today</span>' : ''}</h2>`;
@@ -535,8 +544,9 @@ const QUAL = /\b(fresh|frozen|organic|canned|dried|dry|bag|box|can|jar|tin|of|pc
 const coreKey = s => itemKey(s).replace(QUAL, ' ').replace(/\s+/g, ' ').trim();
 function kitchenMatch(text) { const c = coreKey(text); return c ? S.kitchen.items.find(i => coreKey(i.name) === c) || null : null; }
 const prefFor = it => (it.kit && it.kit.pc) || S.kitchen.prefs[itemKey(it.text)] || '';
-function groceryData(wk = S.view.week) {
-  const w = week(wk), map = new Map();
+// what the plan needs right now (meals + baby prep)
+function liveMealItems(w) {
+  const map = new Map();
   const add = (i, label) => {
     const k = itemKey(i); if (!k) return;
     if (!map.has(k)) map.set(k, { key: k, text: i.trim(), meals: [] });
@@ -545,8 +555,15 @@ function groceryData(wk = S.view.week) {
   [...w.entries].sort((a, b) => a.day - b.day || 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot))
     .forEach(e => (e.ing || []).forEach(i => add(i, `${DAYS[e.day].slice(0, 3)} ${e.name}`)));
   w.prep.forEach(id => { const r = S.baby.recipes.find(x => x.id === id); if (r) (r.ing || []).forEach(i => add(i, `Baby prep: ${r.name}`)); });
+  return [...map.values()];
+}
+// The grocery list is a saved snapshot of the plan's needs (w.glist), made when a plan is applied and
+// updated when you tap Refresh. Weeks without one fall back to the live list.
+function groceryData(wk = S.view.week) {
+  const w = week(wk);
+  const base = (w.glist || liveMealItems(w)).map(x => ({ key: x.key, text: x.text, meals: [...(x.meals || [])] }));
   const list = [], onHand = [];
-  for (const it of map.values()) {
+  for (const it of base) {
     it.kit = kitchenMatch(it.text);
     if (it.kit && it.kit.status !== 'have') it.low = it.kit.status;
     if (w.have[it.key] || (it.kit && it.kit.status === 'have' && !w.need[it.key])) onHand.push(it); else list.push(it);
@@ -556,22 +573,49 @@ function groceryData(wk = S.view.week) {
     .map(i => ({ key: 'k:' + i.id, text: i.name, kit: i, low: i.status, meals: [] }));
   return { list, onHand, restock };
 }
+function staleEntries(w) { return w.entries.filter(e => { const m = findLib(e.name); return m && m.ing?.length && m.ing.join('|') !== (e.ing || []).join('|'); }); }
+function glistDiff(w) {
+  if (!w.glist) return null;
+  const live = liveMealItems(w), now = new Set(live.map(x => x.key)), was = new Set(w.glist.map(x => x.key));
+  const added = live.filter(x => !was.has(x.key)).map(x => x.text), removed = w.glist.filter(x => !now.has(x.key)).map(x => x.text);
+  const stale = staleEntries(w).length;
+  return added.length || removed.length || stale ? { added, removed, stale } : null;
+}
+function refreshGroc(wk = S.view.week) {
+  const w = week(wk);
+  staleEntries(w).forEach(e => { e.ing = [...findLib(e.name).ing]; });
+  const was = new Set((w.glist || []).map(x => x.key)), live = liveMealItems(w), now = new Set(live.map(x => x.key));
+  const added = w.glist ? live.filter(x => !was.has(x.key)).map(x => x.key) : [];
+  const removed = w.glist ? w.glist.filter(x => !now.has(x.key)).length : 0;
+  w.glist = live.map(x => ({ key: x.key, text: x.text, meals: x.meals }));
+  w.fresh = added;
+  Object.keys(w.checked).forEach(k => { if (!k.startsWith('k:') && !now.has(k)) delete w.checked[k]; });
+  saveWeek(wk);
+  return { added: added.length, removed };
+}
 function grocRow(it, w) {
   const done = !!w.checked[it.key], pref = prefFor(it);
   const sub = [it.low ? (it.low === 'out' ? 'Out in the kitchen' : 'Running low') : '', it.meals.slice(0, 3).join(' · ') + (it.meals.length > 3 ? ` +${it.meals.length - 3}` : ''), pref ? 'PC: ' + pref : ''].filter(Boolean).join(' · ');
   return `<div class="li${done ? ' done' : ''}"><button class="check" data-check="${esc(it.key)}" aria-label="Check off ${esc(it.text)}">${done ? '✓' : ''}</button>`
-    + `<button class="gmain" data-check="${esc(it.key)}"><span class="main">${esc(it.text)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span></button>`
+    + `<button class="gmain" data-check="${esc(it.key)}"><span class="main">${esc(it.text)}${(w.fresh || []).includes(it.key) ? '<span class="badge t-both">New</span>' : ''}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span></button>`
     + (it.meals.length > 1 ? `<span class="count">×${it.meals.length}</span>` : '')
     + `<button class="x" data-gopt="${esc(it.key)}" aria-label="Options for ${esc(it.text)}">⋯</button></div>`;
 }
 function renderGroc() {
-  const w = week(), g = groceryData();
+  const w = week();
+  if (!w.glist && (w.entries.length || w.prep.length)) { w.glist = liveMealItems(w); saveWeek(); }
+  const g = groceryData(), d = glistDiff(w);
   const byDone = (a, b) => !!w.checked[a.key] - !!w.checked[b.key] || a.text.localeCompare(b.text);
   const extras = [...w.extras].sort((a, b) => a.done - b.done);
   const all = [...g.list, ...g.restock];
   const left = all.filter(i => !w.checked[i.key]).length + extras.filter(x => !x.done).length;
   const checkedN = all.filter(i => w.checked[i.key]).length + extras.filter(x => x.done).length;
-  let html = `<div class="row"><input class="search" id="extraInput" placeholder="Add an item, like diapers or coffee" aria-label="Add grocery item" enterkeyhint="done"><button class="primary" id="addExtra">Add</button></div>`;
+  let html = '';
+  if (d) {
+    const bits = [d.added.length ? `${d.added.length} to add (${d.added.slice(0, 3).join(', ')}${d.added.length > 3 ? '…' : ''})` : '', d.removed.length ? `${d.removed.length} no longer needed` : '', d.stale ? `${d.stale} recipe${d.stale > 1 ? 's' : ''} updated` : ''].filter(Boolean);
+    html += `<div class="banner warnb"><div><b>Your plan has changed</b><span>${esc(bits.join(' · ') || 'Ingredients changed')}</span></div><button class="primary" id="refreshGroc">Refresh list</button></div>`;
+  }
+  html += `<div class="row"><input class="search" id="extraInput" placeholder="Add an item, like diapers or coffee" aria-label="Add grocery item" enterkeyhint="done"><button class="primary" id="addExtra">Add</button></div>`;
   if (!all.length && !extras.length) {
     html += `<div class="empty">Nothing to buy yet. Ingredients from this week’s meals and baby prep show up here, along with anything marked low in the Kitchen.</div>`;
   } else {
@@ -581,7 +625,7 @@ function renderGroc() {
       + extras.map(x => `<div class="li${x.done ? ' done' : ''}"><button class="check" data-xcheck="${x.id}" aria-label="Check off ${esc(x.text)}">${x.done ? '✓' : ''}</button><span class="main">${esc(x.text)}</span><button class="x" data-xdel="${x.id}" aria-label="Remove ${esc(x.text)}">×</button></div>`).join('')
       + '</div></div>';
     html += `<div class="actions"><button class="primary" id="openPC">Send to PC Express (${left})</button><button class="ghostbtn" id="copyList">Copy list</button></div>`
-      + `<div class="actions">${checkedN ? `<button class="ghostbtn" id="putAway">Put away ${checkedN} checked</button>` : ''}<button class="ghostbtn" id="uncheckAll">Uncheck all</button></div>`;
+      + `<div class="actions">${checkedN ? `<button class="ghostbtn" id="putAway">Put away ${checkedN} checked</button>` : ''}<button class="ghostbtn" id="uncheckAll">Uncheck all</button>${d ? '' : '<button class="ghostbtn" id="refreshGroc">Refresh from plan</button>'}</div>`;
   }
   if (g.onHand.length) html += `<details class="onhand"><summary>Already have ${g.onHand.length} item${g.onHand.length > 1 ? 's' : ''} for this week’s meals</summary><div class="list">`
     + g.onHand.sort((a, b) => a.text.localeCompare(b.text)).map(it => `<div class="li"><span class="main">${esc(it.text)}<span class="sub">${it.kit ? `In the ${it.kit.loc}${it.kit.qty ? ' · ' + esc(it.kit.qty) : ''}` : 'You said you have it'}</span></span><button class="mini" data-needit="${esc(it.key)}">Buy anyway</button></div>`).join('')
@@ -741,11 +785,13 @@ $('#sheetwrap').addEventListener('click', ev => {
     const e = week().entries.find(x => x.id === sheet.id); if (!e) return;
     getRecipeFor(t, async alive => {
       const box = $('#recipeBox'); box.classList.remove('empty-r'); box.classList.add('writing'); box.textContent = 'Thinking…';
-      const text = await streamRecipe(e, false, txt => { if (alive()) box.textContent = txt; });
-      let lib = findLib(e.name);
-      if (!lib) { lib = { id: uidGen(), name: e.name, tag: e.tag, ing: [...(e.ing || [])] }; S.library.meals.push(lib); }
-      lib.recipe = text; saveLib();
-      if (alive()) { box.classList.remove('writing'); box.innerHTML = linkify(text); t.remove(); toast('Recipe saved to this meal'); }
+      const res = await streamRecipe(e, false, txt => { if (alive()) box.textContent = txt; });
+      storeRecipe(e, res);
+      if (alive()) {
+        box.classList.remove('writing'); box.innerHTML = linkify(res.text); t.remove();
+        if (res.ing.length) $('#fIng').value = res.ing.join('\n');
+        toast(res.ing.length ? 'Recipe saved. Its ingredients are ready for the grocery list.' : 'Recipe saved to this meal');
+      }
     });
     return;
   }
@@ -753,8 +799,8 @@ $('#sheetwrap').addEventListener('click', ev => {
     const ta = $('#fRecipe');
     getRecipeFor(t, async alive => {
       const m = { name: $('#fName').value.trim(), ing: parseIng($('#fIng').value) }; if (!m.name) { toast('Add the meal name first'); return; }
-      const text = await streamRecipe(m, false, txt => { if (alive()) ta.value = txt; });
-      if (alive()) { ta.value = text; toast('Recipe written. Tap Save to keep it.'); }
+      const res = await streamRecipe(m, false, txt => { if (alive()) ta.value = txt; });
+      if (alive()) { ta.value = res.text; if (res.ing.length) $('#fIng').value = res.ing.join('\n'); toast('Recipe written. Tap Save to keep it.'); }
     });
     return;
   }
@@ -762,8 +808,8 @@ $('#sheetwrap').addEventListener('click', ev => {
     const ta = $('#bNote');
     getRecipeFor(t, async alive => {
       const m = { name: $('#bName').value.trim(), ing: parseIng($('#bIng').value), yield: $('#bYield').value.trim() }; if (!m.name) { toast('Add the recipe name first'); return; }
-      const text = await streamRecipe(m, true, txt => { if (alive()) ta.value = txt; });
-      if (alive()) { ta.value = text; toast('Recipe written. Tap Save to keep it.'); }
+      const res = await streamRecipe(m, true, txt => { if (alive()) ta.value = txt; });
+      if (alive()) { ta.value = res.text; if (res.ing.length) $('#bIng').value = res.ing.join('\n'); toast('Recipe written. Tap Save to keep it.'); }
     });
     return;
   }
@@ -949,7 +995,7 @@ async function runImport() {
     const w = week(keys[i]);
     if (replace) { w.entries = []; w.checked = {}; }
     pw.entries.forEach(e => w.entries.push({ id: uidGen(), ...e }));
-    saveWeek(keys[i]);
+    saveWeek(keys[i]); refreshGroc(keys[i]);
   });
   if (saveAll) {
     let added = 0;
@@ -1010,7 +1056,9 @@ Steps
 
 For the toddler
 - one to three short tips (portion, texture, cooling)
-${baby ? '\nFreezing and reheating\n- how to freeze, how long it keeps, how to reheat' : '\nLeftovers\n- one short line on storing and reheating'}`;
+${baby ? '\nFreezing and reheating\n- how to freeze, how long it keeps, how to reheat' : '\nLeftovers\n- one short line on storing and reheating'}
+
+Shopping list: every ingredient above as simple grocery names with no amounts, comma-separated, on this one line`;
 const UNITS_RULE = 'Give amounts in the units we use: pounds for meat and fish (matching any amount we list), cups and spoons for everything else, with grams in brackets where helpful.';
 const HOUSE = 'The toddler eats the same food but needs low salt: cook with little or no added salt and season the adults\' portions after setting the toddler\'s aside. Keep toddler safety in mind (soft textures, small pieces, no whole nuts).';
 // what we have of a recipe's ingredients, with amounts, so the recipe can be sized to it
@@ -1026,11 +1074,22 @@ ${baby ? 'This is a toddler freezer batch-prep recipe: make a batch for the free
 ${HOUSE}
 ${(m.ing || []).length ? `Use these ingredients (add pantry basics if needed): ${m.ing.join(', ')}.` : ''}${m.note ? `\nNote from the plan: ${m.note}` : ''}${m.yield ? `\nYield: ${m.yield}` : ''}
 ${have.length ? `\nWhat we have of these (use the full amount of any meat or fish listed, scale the rest of the recipe to it, and include thawing time for anything from the freezer):\n${have.join('\n')}\n` : ''}
-${UNITS_RULE} ${RECIPE_LAYOUT(baby)}`;
+${UNITS_RULE}${S.kitchen.items.length ? `\nIn the shopping list, name things the way we do where they match: ${S.kitchen.items.slice(0, 80).map(i => i.name).join(', ')}.` : ''} ${RECIPE_LAYOUT(baby)}`;
 }
+const SHOP_RE = /\n?[ \t]*shopping list:\s*(.*)\s*$/i;
 async function streamRecipe(m, baby, onText) {
-  const { text } = await sampleFn(recipePrompt(m, baby), { modelTier: 'default', onText: ({ text }) => onText(text) });
-  return text.replace(/\*\*|^#+\s*/gm, '').trim();
+  const { text } = await sampleFn(recipePrompt(m, baby), { modelTier: 'default', onText: ({ text }) => onText(text.split(/\n[ \t]*shopping list:/i)[0].replace(/\*\*|^#+\s*/gm, '')) });
+  const clean = text.replace(/\*\*|^#+\s*/gm, '').trim(), sm = clean.match(SHOP_RE);
+  const ing = sm ? sm[1].split(',').map(x => x.trim().replace(/\.$/, '')).filter(Boolean).slice(0, 40) : [];
+  return { text: (sm ? clean.slice(0, sm.index) : clean).trim(), ing };
+}
+// save a written recipe to the meal and use its shopping list for the meal's ingredients
+function storeRecipe(e, res, wk = S.view.week) {
+  let lib = findLib(e.name);
+  if (!lib) { lib = { id: uidGen(), name: e.name, tag: e.tag, ing: [...(e.ing || [])] }; S.library.meals.push(lib); }
+  lib.recipe = res.text;
+  if (res.ing.length) { lib.ing = [...res.ing]; week(wk).entries.forEach(x => { if (norm(x.name) === norm(e.name)) x.ing = [...res.ing]; }); saveWeek(wk); }
+  saveLib();
 }
 const RECIPE_ERR = { not_granted: 'Claude isn’t allowed on this page, so it can’t write recipes.', rate_limited: 'Claude is busy. Try again in a minute.' };
 async function getRecipeFor(btn, run) {
@@ -1040,6 +1099,31 @@ async function getRecipeFor(btn, run) {
   try { await run(() => sheet === s0); }
   catch (e) { if (sheet === s0) toast(RECIPE_ERR[e?.code] || 'Couldn’t get a recipe right now. Try again.'); }
   if (sheet === s0 && document.body.contains(btn)) { btn.disabled = false; btn.textContent = label; }
+}
+
+let recipeJob = null; // { wk, total, done, failed, running }
+const dinnersMissing = w => { const seen = new Set(); return w.entries.filter(e => e.slot === 'd' && !leftoverOf(e.name) && !findLib(e.name)?.recipe && !seen.has(norm(e.name)) && seen.add(norm(e.name))); };
+async function preloadRecipes(wk) {
+  if (!sampleFn || recipeJob?.running) return;
+  const todo = dinnersMissing(week(wk)); if (!todo.length) return;
+  const job = recipeJob = { wk, total: todo.length, done: 0, failed: 0, running: true };
+  const paint = () => { if (S.view.tab === 'plan' && S.view.week === wk) renderPlan(); };
+  paint();
+  let stop = false, i = 0;
+  const worker = async () => {
+    while (!stop && i < todo.length) {
+      const e = todo[i++];
+      try { storeRecipe(e, await streamRecipe(e, false, () => {}), wk); }
+      catch (err) { job.failed++; if (err?.code === 'not_granted' || err?.code === 'sampling_disabled') stop = true; }
+      job.done++; paint();
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  job.running = false;
+  const ch = refreshGroc(wk);
+  render();
+  const ok = job.done - job.failed;
+  toast(ok ? `Recipes ready for ${ok} dinner${ok > 1 ? 's' : ''}. Grocery list updated${ch.added ? ` (+${ch.added})` : ''}.` : 'Couldn’t write the recipes right now. Tap Write them on the plan to try again.');
 }
 
 /* ---------- pantry checklist ---------- */
@@ -1228,7 +1312,7 @@ function saveKRecipe(addDay) {
   let lib = findLib(r.name);
   if (!lib) { lib = { id: uidGen(), name: r.name, tag: 'both', ing: [...r.ing] }; S.library.meals.push(lib); }
   lib.recipe = r.recipe; saveLib();
-  if (addDay != null) { week().entries.push({ id: uidGen(), day: addDay, slot: 'd', name: r.name, tag: 'both', ing: [...r.ing], note: r.note }); saveWeek(); }
+  if (addDay != null) { week().entries.push({ id: uidGen(), day: addDay, slot: 'd', name: r.name, tag: 'both', ing: [...r.ing], note: r.note }); saveWeek(); refreshGroc(); }
   closeSheet(); render();
   toast(addDay != null ? `Added to ${DAYS[addDay]} dinner. Recipe saved.` : 'Saved to Meals');
 }
@@ -1543,8 +1627,10 @@ function applyPlan() {
     if (!w.prep.includes(rec.id)) { w.prep.push(rec.id); preps++; }
   });
   if (preps) saveBaby();
-  saveWeek(); closeSheet(); S.view.tab = 'plan'; window.scrollTo(0, 0); render();
-  toast(`Added ${r.meals.length} meals${preps ? ` and ${preps} baby prep` : ''}. Tap any meal for its recipe.`);
+  saveWeek(); refreshGroc(); closeSheet(); S.view.tab = 'plan'; window.scrollTo(0, 0); render();
+  const wk = S.view.week, n = dinnersMissing(week(wk)).length;
+  toast(`Added ${r.meals.length} meals${preps ? ` and ${preps} baby prep` : ''} and built the grocery list.${n ? ' Writing dinner recipes now…' : ''}`);
+  preloadRecipes(wk);
 }
 
 /* ---------- clicks ---------- */
@@ -1566,6 +1652,9 @@ document.addEventListener('click', ev => {
   if (t.id === 'newMeal') { openSheet({ mode: 'add-lib' }); return; }
   if (t.id === 'openImport') { openSheet({ mode: 'import' }); return; }
   if (t.id === 'openPlanner') { openSheet({ mode: 'planner' }); return; }
+  if (t.id === 'preloadRecipes') { preloadRecipes(S.view.week); return; }
+  if (t.id === 'hideRecipeNag') { week().noRecipeNag = true; saveWeek(); renderPlan(); return; }
+  if (t.id === 'refreshGroc') { const r = refreshGroc(); render(); toast(r.added || r.removed ? `Grocery list refreshed: ${r.added} added, ${r.removed} removed` : 'Grocery list is up to date'); return; }
   if (t.id === 'editIdeas') { openSheet({ mode: 'ideas' }); return; }
   if (t.dataset.mf) { S.view.mfilter = t.dataset.mf; cacheLocal(); render(); return; }
   if (t.dataset.star) { const m = S.library.meals.find(x => x.id === t.dataset.star); m.fav = !m.fav; saveLib(); render(); toast(m.fav ? `${m.name} is in the rotation` : `${m.name} removed from the rotation`); return; }
