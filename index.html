@@ -157,6 +157,52 @@ details.fmt pre{margin:0;padding:0 12px 12px;white-space:pre-wrap;font:.8rem/1.4
 .preview b{font-variant-numeric:tabular-nums}
 #toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + 24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);z-index:95;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:.88rem;opacity:0;pointer-events:none;transition:.2s;max-width:calc(100% - 32px);text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
+/* Hub additions: ideas card, rotation stars, kitchen status, baby stash, planner */
+:root{--star:#D08A00}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--star:#F5C04A}}
+:root[data-theme="dark"]{--star:#F5C04A}
+.ideas{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--surface);border:1.5px dashed var(--line);border-radius:16px;padding:12px 14px}
+.ideas b{font-family:var(--f-display);font-weight:800;font-size:1rem}
+.ideas span{color:var(--muted);font-size:.88rem;white-space:pre-line;overflow-wrap:anywhere}
+.ideas.has{border-style:solid;border-color:var(--both);background:var(--both-soft)}
+.ideas.has span{color:var(--ink)}
+.gmain{flex:1;min-width:0;border:0;background:none;text-align:left;padding:0;display:flex;flex-direction:column}
+.star{border:0;background:none;font-size:1.25rem;line-height:1;color:var(--line);width:32px;height:32px;flex:none}
+.star[aria-pressed="true"]{color:var(--star)}
+.chip .fv{color:var(--star);font-size:.8rem;flex:none}
+.stat{border:0;border-radius:99px;padding:5px 10px;font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;flex:none;min-width:52px}
+.s-have{background:var(--fam-soft);color:var(--fam)}
+.s-low{background:var(--baby-soft);color:var(--baby)}
+.s-out{background:var(--danger-soft);color:var(--danger)}
+.sel{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 8px;font-size:16px;flex:none}
+.mini{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:6px 10px;font-weight:700;font-size:.8rem;flex:none}
+.mini.on{background:var(--baby-soft);color:var(--baby);border-color:transparent}
+.ctr{display:flex;align-items:center;gap:4px;flex:none}
+.ctr button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--bg);font-weight:800}
+.ctr b{min-width:26px;text-align:center;font-variant-numeric:tabular-nums}
+.warn{color:var(--baby);font-weight:700}
+.ghd{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.ghd h3{margin:0;flex:1}
+.ghd .mini{padding:4px 9px}
+details.onhand{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+details.onhand summary{padding:12px 14px;font-weight:600;font-size:.9rem;cursor:pointer;color:var(--muted)}
+details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+.textbtn.ai{background:var(--both);color:var(--surface);border-color:var(--both)}
+.pday{margin:6px 0 2px;font-weight:800;font-size:.9rem}
+.pm{display:flex;gap:8px;font-size:.88rem;padding:2px 0}
+.pm .s{width:62px;color:var(--muted);font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding-top:3px;flex:none}
+.pm .n{flex:1;min-width:0;overflow-wrap:anywhere}
+.pm .n small{display:block;color:var(--muted);font-size:.78rem}
+.badge{font-size:.6rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:99px;margin-left:4px;vertical-align:2px}
+.summary{background:var(--both-soft);border-radius:10px;padding:10px 12px;font-size:.9rem}
+.busy{display:flex;align-items:center;gap:12px;padding:18px 4px;color:var(--muted)}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--both);animation:sp 1s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.copybox{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:.82rem/1.45 ui-monospace,"SF Mono",Menlo,monospace}
+.tabs button{font-size:.72rem}
+.field > label.cb{text-transform:none;letter-spacing:0;font-size:.92rem;font-weight:500;color:var(--ink);align-items:flex-start}
+.field > label.cb input{margin-top:1px;flex:none}
 </style>
 
 <div class="top"><div class="wrap">
@@ -173,6 +219,7 @@ details.fmt pre{margin:0;padding:0 12px 12px;white-space:pre-wrap;font:.8rem/1.4
       <button data-f="baby" aria-pressed="false">Baby</button>
     </div>
     <button class="textbtn" id="openImport">Import</button>
+    <button class="textbtn ai" id="openPlanner" hidden>✦ Plan</button>
   </div>
 </div></div>
 
@@ -181,6 +228,8 @@ details.fmt pre{margin:0;padding:0 12px 12px;white-space:pre-wrap;font:.8rem/1.4
 </div></main>
 <main id="vMeals" hidden><div class="wrap panel" id="mealsPanel"></div></main>
 <main id="vGroc" hidden><div class="wrap panel" id="grocPanel"></div></main>
+<main id="vKitchen" hidden><div class="wrap panel" id="kitPanel"></div></main>
+<main id="vBaby" hidden><div class="wrap panel" id="babyPanel"></div></main>
 
 <div id="tray"><div class="wrap">
   <button class="trayhead" id="trayToggle" aria-expanded="true"><b>Saved meals</b><span>Hold one and drag it onto a day</span><i>▾</i></button>
@@ -193,8 +242,10 @@ details.fmt pre{margin:0;padding:0 12px 12px;white-space:pre-wrap;font:.8rem/1.4
 
 <nav class="tabs"><div class="wrap" role="tablist">
   <button role="tab" data-tab="plan" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Plan</button>
-  <button role="tab" data-tab="meals" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 13h16a8 8 0 0 1-16 0zM12 9V4M8.5 9.5 7 6M15.5 9.5 17 6"/></svg>Saved meals</button>
   <button role="tab" data-tab="groc" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 11h10.6L20.5 7H6.6"/><circle cx="9.5" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg>Groceries</button>
+  <button role="tab" data-tab="kitchen" aria-selected="false"><svg viewBox="0 0 24 24"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 6v1.5M9 13v2.5"/></svg>Kitchen</button>
+  <button role="tab" data-tab="baby" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 6l2.5-1.5M9.5 19.5 12 18l2.5 1.5"/></svg>Baby prep</button>
+  <button role="tab" data-tab="meals" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 13h16a8 8 0 0 1-16 0zM12 9V4M8.5 9.5 7 6M15.5 9.5 17 6"/></svg>Meals</button>
 </div></nav>
 
 <div id="sheetwrap" hidden><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
@@ -230,25 +281,52 @@ const STARTER = [
   ['Salmon, rice & broccoli','both',['Salmon','Rice','Broccoli']],
   ['Steamed veggies & cheese cubes','baby',['Carrots','Peas','Cheddar']],
 ];
-let S = { library: { meals: [], starter: false }, weeks: {}, view: { week: THIS_WEEK, tab: 'plan', filter: 'all', trayOpen: true } };
+const BABY_STARTER = [
+  ['Baby oatmeal cups', ['Rolled oats','Milk','Bananas','Cinnamon'], '12 cups', 'Mix, bake in a muffin tin at 350°F for about 20 min. Cool, freeze on a tray, then bag. Warm from frozen.'],
+  ['Veggie egg muffins', ['Eggs','Spinach','Red pepper','Cheddar'], '12 mini muffins', 'No added salt. Bake at 350°F for 15–18 min. Cool fully before freezing.'],
+  ['Low-salt bolognese', ['Lean ground beef','Onion','Carrots','Celery','Garlic','Crushed tomatoes (no salt added)'], '8 toddler portions', 'Grate the veg so it melts into the sauce. Freeze in small jars or silicone trays. Serve with pasta or rice.'],
+];
+let S = {
+  library: { meals: [], starter: false },
+  kitchen: { items: [], prefs: {} },
+  baby: { recipes: [], stash: [], starter: false },
+  weeks: {},
+  view: { week: THIS_WEEK, tab: 'plan', filter: 'all', trayOpen: true, kfilter: 'all', mfilter: 'all' }
+};
 const LS = 'familyMealPlan.v1';
 try {
   const c = JSON.parse(localStorage.getItem(LS) || 'null');
-  if (c) { S.library = c.library || S.library; S.weeks = c.weeks || {}; if (c.view) Object.assign(S.view, c.view, { week: THIS_WEEK }); }
+  if (c) {
+    S.library = c.library || S.library;
+    if (c.kitchen) S.kitchen = Object.assign(S.kitchen, c.kitchen);
+    if (c.baby) S.baby = Object.assign(S.baby, c.baby);
+    S.weeks = c.weeks || {};
+    if (c.view) Object.assign(S.view, c.view, { week: THIS_WEEK });
+  }
 } catch {}
 if (!S.library.starter && !S.library.meals.length) {
   S.library.meals = STARTER.map(([name, tag, ing]) => ({ id: uidGen(), name, tag, ing }));
   S.library.starter = true;
 }
-const newWeek = () => ({ entries: [], checked: {}, extras: [], box: [] });
-const week = (k = S.view.week) => { const w = (S.weeks[k] ||= newWeek()); w.box ||= []; return w; };
+if (!S.baby.starter && !S.baby.recipes.length) {
+  S.baby.recipes = BABY_STARTER.map(([name, ing, yld, note]) => ({ id: uidGen(), name, ing, yield: yld, note }));
+  S.baby.starter = true;
+}
+const newWeek = () => ({ entries: [], checked: {}, extras: [], box: [], ideas: '', prep: [], prepDone: {}, have: {}, need: {} });
+const week = (k = S.view.week) => {
+  const w = (S.weeks[k] ||= newWeek());
+  w.box ||= []; w.prep ||= []; w.prepDone ||= {}; w.have ||= {}; w.need ||= {}; w.checked ||= {}; w.extras ||= []; w.ideas ??= '';
+  return w;
+};
 
-/* ---------- persistence: per-person private docs, local cache as backup ---------- */
-let db = null, uid = null;
+/* ---------- persistence: shared household docs (hub/*), local cache as backup ----------
+   Earlier versions kept each person's data in private docs; those are copied over on first load. */
+let db = null, uid = null, sampleFn = null;
 const loaded = {}, dirty = {}, timers = {}, writing = {}, again = {};
-const docRef = k => db.collection('data/users/' + uid).doc(k);
+const docRef = k => db.collection('hub').doc(k);
+const oldRef = k => db.collection('data/users/' + uid).doc(k);
 const weekDocKey = k => 'week-' + k;
-function cacheLocal() { try { localStorage.setItem(LS, JSON.stringify({ library: S.library, weeks: S.weeks, view: S.view })); } catch {} }
+function cacheLocal() { try { localStorage.setItem(LS, JSON.stringify({ library: S.library, kitchen: S.kitchen, baby: S.baby, weeks: S.weeks, view: S.view })); } catch {} }
 function save(k) {
   cacheLocal();
   dirty[k] = true;
@@ -257,8 +335,16 @@ function save(k) {
   timers[k] = setTimeout(() => flush(k), 500);
 }
 const saveLib = () => save('library');
-const saveWeek = (wk = S.view.week) => save(weekDocKey(wk));
-function docData(k) { return k === 'library' ? S.library : week(k.slice(5)); }
+const saveKit = () => save('kitchen');
+const saveBaby = () => save('baby');
+const saveWeek = (wk = S.view.week) => { stampLast(wk); save(weekDocKey(wk)); };
+// remember the latest week each saved meal was planned, so rotation can favour ones not had lately
+function stampLast(wk) {
+  let changed = false;
+  (S.weeks[wk]?.entries || []).forEach(e => { const m = findLib(e.name); if (m && (!m.last || m.last < wk)) { m.last = wk; changed = true; } });
+  if (changed) saveLib();
+}
+function docData(k) { return k === 'library' ? S.library : k === 'kitchen' ? S.kitchen : k === 'baby' ? S.baby : week(k.slice(5)); }
 async function flush(k, retried) {
   if (writing[k]) { again[k] = true; return; }
   writing[k] = true;
@@ -266,7 +352,8 @@ async function flush(k, retried) {
   catch (e) {
     if (e && e.code === 'unavailable' && !retried) { writing[k] = false; setTimeout(() => flush(k, true), 800 + Math.random() * 800); return; }
     if (e && e.code === 'quota_exceeded') toast('Storage is full. Delete old weeks or meals.');
-    else toast('Couldn’t save to your account. Saved on this phone.');
+    else if (e && (e.code === 'permission_denied' || e.code === 'not_granted')) toast('You can view this plan but not change it.');
+    else toast('Couldn’t save to your account. Saved on this device.');
   }
   writing[k] = false;
   if (again[k]) { again[k] = false; flush(k); }
@@ -279,58 +366,69 @@ function loadDoc(k) {
 async function loadDocOnce(k) {
   loaded[k] = false;
   try {
-    const snap = await docRef(k).get();
+    let snap = await docRef(k).get(), fromOld = false;
+    if (!snap.exists && uid && (k === 'library' || k.startsWith('week-'))) {
+      try { const o = await oldRef(k).get(); if (o.exists) { snap = o; fromOld = true; } } catch {}
+    }
     if (snap.exists && !dirty[k]) {
       const d = JSON.parse(JSON.stringify(snap.data()));
       if (k === 'library') S.library = Object.assign({ meals: [], starter: true }, d);
+      else if (k === 'kitchen') S.kitchen = Object.assign({ items: [], prefs: {} }, d);
+      else if (k === 'baby') S.baby = Object.assign({ recipes: [], stash: [], starter: true }, d);
       else S.weeks[k.slice(5)] = Object.assign(newWeek(), d);
       cacheLocal();
     }
     loaded[k] = true;
-    const hasLocal = k === 'library' ? true : (S.weeks[k.slice(5)]?.entries?.length || S.weeks[k.slice(5)]?.extras?.length || S.weeks[k.slice(5)]?.box?.length);
-    if ((!snap.exists && hasLocal) || dirty[k]) flush(k);
+    const wk = k.startsWith('week-') ? S.weeks[k.slice(5)] : null;
+    const hasLocal = !k.startsWith('week-') || !!(wk && (wk.entries?.length || wk.extras?.length || wk.box?.length || wk.ideas || wk.prep?.length));
+    if (fromOld || (!snap.exists && hasLocal) || dirty[k]) flush(k);
     render();
   } catch { delete loaded[k]; delete loadP[k]; }
 }
 (async () => {
   const c = window.claude;
   if (!c || !c.use) return;
+  c.use('sample').then(f => { sampleFn = f || null; renderHeader(); }).catch(() => {});
   try {
     const [d, u] = await Promise.all([c.use('db'), c.use('user')]);
-    if (!d || !u) return;
-    const id = await u.id();
-    if (!id) return;
-    db = d; uid = id;
-    await loadDoc('library');
-    await loadDoc(weekDocKey(S.view.week));
+    if (!d) return;
+    try { uid = u ? await u.id() : null; } catch {}
+    db = d;
+    await Promise.all(['library', 'kitchen', 'baby', weekDocKey(S.view.week)].map(loadDoc));
   } catch {}
 })();
 
 /* ---------- rendering ---------- */
+const LOCS = [['pantry','Pantry'],['fridge','Fridge'],['freezer','Freezer']];
+const STATNAME = { have: 'Have', low: 'Low', out: 'Out' };
+const slotName = k => SLOTS.find(x => x[0] === k)[1];
+const shortDate = k => { const d = parseKey(k); return `${MON[d.getMonth()]} ${d.getDate()}`; };
 function visible(tag) { const f = S.view.filter; return f === 'all' || tag === 'both' || tag === f; }
 function chipHTML(e, kind) {
+  const fav = kind === 'lib' ? e.fav : findLib(e.name)?.fav;
   return `<div class="chip t-${e.tag}" data-drag="${kind}" data-id="${e.id}" role="button" tabindex="0">`
+    + (fav ? '<span class="fv" aria-label="in rotation">★</span>' : '')
     + `<span class="cn">${esc(e.name)}</span>${e.note ? '<span class="nt" aria-label="has note">✎</span>' : ''}<span class="ct">${TAGNAME[e.tag]}</span></div>`;
 }
 function renderHeader() {
-  const mon = parseKey(S.view.week), sun = addDays(mon, 6);
-  const range = mon.getMonth() === sun.getMonth()
-    ? `${MON[mon.getMonth()]} ${mon.getDate()} – ${sun.getDate()}`
-    : `${MON[mon.getMonth()]} ${mon.getDate()} – ${MON[sun.getMonth()]} ${sun.getDate()}`;
+  const tab = S.view.tab, mon = parseKey(S.view.week), sun = addDays(mon, 6);
+  const range = weekRange(S.view.week);
   const diff = Math.round((mon - parseKey(THIS_WEEK)) / 864e5 / 7);
   const label = diff === 0 ? 'This week' : diff === 1 ? 'Next week' : diff === -1 ? 'Last week' : `Week of ${MON[mon.getMonth()]} ${mon.getDate()}`;
-  $('#weekTitle').innerHTML = `${label}<small>${range}</small>`;
-  $('#thisWeek').hidden = diff === 0;
-  $('#filterRow').hidden = S.view.tab !== 'plan';
+  const weekly = tab === 'plan' || tab === 'groc' || tab === 'baby';
+  $('#weekTitle').innerHTML = `${label}<small>${tab === 'baby' ? 'Baby prep · ' : tab === 'groc' ? 'Groceries · ' : ''}${range}</small>`;
+  $('#thisWeek').hidden = diff === 0 || !weekly;
+  ['prevWeek','nextWeek'].forEach(id => $('#' + id).hidden = !weekly);
+  $('#filterRow').hidden = tab !== 'plan';
+  $('#openPlanner').hidden = !sampleFn;
   document.querySelectorAll('#filter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === S.view.filter));
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === S.view.tab));
-  ['prevWeek','nextWeek'].forEach(id => $('#' + id).hidden = S.view.tab === 'meals');
-  $('#thisWeek').hidden ||= S.view.tab === 'meals';
-  if (S.view.tab === 'meals') $('#weekTitle').innerHTML = `Saved meals<small>${S.library.meals.length} meals</small>`;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  if (tab === 'meals') { const f = S.library.meals.filter(m => m.fav).length; $('#weekTitle').innerHTML = `Meals<small>${S.library.meals.length} saved · ${f} in rotation</small>`; }
+  if (tab === 'kitchen') { const it = S.kitchen.items, low = it.filter(i => i.status !== 'have').length; $('#weekTitle').innerHTML = `Kitchen<small>${it.length} item${it.length === 1 ? '' : 's'} tracked${low ? ` · ${low} low or out` : ''}</small>`; }
 }
 function renderPlan() {
   const w = week(), mon = parseKey(S.view.week), today = ymd(new Date());
-  let html = '';
+  let html = `<button class="ideas${w.ideas ? ' has' : ''}" id="editIdeas"><b>Ideas for this week</b><span>${w.ideas ? esc(w.ideas) : 'Cravings, recipes to try, what needs using up, busy nights… Tap to jot them down.'}</span></button>`;
   DAYS.forEach((dn, di) => {
     const date = addDays(mon, di), isToday = ymd(date) === today;
     html += `<section class="day${isToday ? ' today' : ''}"><h2>${dn}<span class="dd">${MON[date.getMonth()]} ${date.getDate()}</span>${isToday ? '<span class="pill">Today</span>' : ''}</h2>`;
@@ -349,77 +447,170 @@ function renderTray() {
   tray.hidden = S.view.tab !== 'plan';
   tray.classList.toggle('closed', !S.view.trayOpen);
   $('#trayToggle').setAttribute('aria-expanded', S.view.trayOpen);
-  const meals = [...S.library.meals].filter(m => visible(m.tag)).sort((a, b) => a.name.localeCompare(b.name));
+  const meals = [...S.library.meals].filter(m => visible(m.tag)).sort((a, b) => (!!b.fav - !!a.fav) || a.name.localeCompare(b.name));
   $('#trayList').innerHTML = meals.length ? meals.map(m => chipHTML(m, 'lib')).join('')
     : '<span class="note">No saved meals yet. Meals you add are saved here.</span>';
 }
 let mealQuery = '';
 function renderMeals() {
-  const q = norm(mealQuery);
-  const meals = S.library.meals.filter(m => !q || norm(m.name).includes(q)).sort((a, b) => a.name.localeCompare(b.name));
-  let html = `<div class="row"><input class="search" id="mealSearch" type="search" placeholder="Search saved meals" value="${esc(mealQuery)}" aria-label="Search saved meals"><button class="primary" id="newMeal">New meal</button></div>`;
-  if (S.library.starter && S.library.meals.length) html += `<p class="note">A few example meals are here to start. Edit or delete them anytime.</p>`;
+  const q = norm(mealQuery), favOnly = S.view.mfilter === 'fav';
+  const meals = S.library.meals.filter(m => (!q || norm(m.name).includes(q)) && (!favOnly || m.fav)).sort((a, b) => a.name.localeCompare(b.name));
+  let html = `<div class="row"><input class="search" id="mealSearch" type="search" placeholder="Search saved meals" value="${esc(mealQuery)}" aria-label="Search saved meals"><button class="primary" id="newMeal">New meal</button></div>`
+    + `<div class="seg" role="group" aria-label="Show"><button data-mf="all" aria-pressed="${!favOnly}">All meals</button><button data-mf="fav" aria-pressed="${favOnly}">★ Rotation</button></div>`;
+  if (S.library.starter && S.library.meals.length && !favOnly) html += `<p class="note">Tap ★ on meals you love to keep them in the rotation. Claude plans around them first.</p>`;
   let any = false;
   TAGS.forEach(([t, tl]) => {
     const list = meals.filter(m => m.tag === t);
     if (!list.length) return;
     any = true;
     html += `<div class="group"><h3>${tl === 'Both' ? 'Both (everyone eats it)' : tl}</h3><div class="list">`
-      + list.map(m => `<button class="li" data-editlib="${m.id}"><span class="dot t-${m.tag}"></span><span class="main">${esc(m.name)}<span class="sub">${m.ing.length ? esc(m.ing.join(', ')) : 'No ingredients yet'}</span></span></button>`).join('')
+      + list.map(m => `<div class="li"><button class="star" data-star="${m.id}" aria-pressed="${!!m.fav}" aria-label="${m.fav ? 'Remove from' : 'Add to'} rotation">★</button>`
+        + `<button class="gmain" data-editlib="${m.id}"><span class="main">${esc(m.name)}<span class="sub">${m.last ? `Last planned ${shortDate(m.last)} · ` : ''}${m.ing.length ? esc(m.ing.join(', ')) : 'No ingredients yet'}</span></span></button></div>`).join('')
       + '</div></div>';
   });
-  if (!any) html += `<div class="empty">${q ? 'No saved meals match that search.' : 'No saved meals yet. Tap New meal, or add a meal to a day and it is saved here.'}</div>`;
+  if (!any) html += `<div class="empty">${q ? 'No saved meals match that search.' : favOnly ? 'Nothing in the rotation yet. Tap ★ next to a meal you’d happily eat again.' : 'No saved meals yet. Tap New meal, or add a meal to a day and it is saved here.'}</div>`;
   $('#mealsPanel').innerHTML = html;
 }
+
+/* ---------- groceries ---------- */
 // "Sweet Potatoes" and "sweet potato" are the same grocery item
 const single = w => w.replace(/ies$/, 'y').replace(/(oes|ches|shes|xes)$/, m => m.slice(0, -2)).replace(/([^s])s$/, '$1');
 const itemKey = s => norm(s).replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean).map(single).join(' ');
 const inBox = (key, boxKeys) => boxKeys.some(b => b && (key === b || (' ' + key + ' ').includes(' ' + b + ' ')));
-function groceryItems() {
-  const w = week(), map = new Map(), boxKeys = (w.box || []).map(itemKey), hidden = new Set();
-  [...w.entries].sort((a, b) => a.day - b.day || 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot)).forEach(e => {
-    (e.ing || []).forEach(i => {
-      const k = itemKey(i); if (!k) return;
-      if (inBox(k, boxKeys)) { hidden.add(k); return; }
-      if (!map.has(k)) map.set(k, { key: k, text: i.trim(), meals: [] });
-      map.get(k).meals.push(`${DAYS[e.day].slice(0,3)} ${e.name}`);
-    });
-  });
-  const items = [...map.values()];
-  items.hidden = hidden.size;
-  return items;
+// "frozen chicken thighs" in the freezer covers "chicken thighs" in a recipe
+const QUAL = /\b(fresh|frozen|organic|canned|dried|dry|bag|box|can|jar|tin|of|pc|large|small|whole|raw|plain|unsalted|low sodium|no salt added|boneless|skinless)\b/g;
+const coreKey = s => itemKey(s).replace(QUAL, ' ').replace(/\s+/g, ' ').trim();
+function kitchenMatch(text) { const c = coreKey(text); return c ? S.kitchen.items.find(i => coreKey(i.name) === c) || null : null; }
+const prefFor = it => (it.kit && it.kit.pc) || S.kitchen.prefs[itemKey(it.text)] || '';
+function groceryData(wk = S.view.week) {
+  const w = week(wk), boxKeys = w.box.map(itemKey), map = new Map(), boxed = new Set();
+  const add = (i, label) => {
+    const k = itemKey(i); if (!k) return;
+    if (inBox(k, boxKeys)) { boxed.add(k); return; }
+    if (!map.has(k)) map.set(k, { key: k, text: i.trim(), meals: [] });
+    map.get(k).meals.push(label);
+  };
+  [...w.entries].sort((a, b) => a.day - b.day || 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot))
+    .forEach(e => (e.ing || []).forEach(i => add(i, `${DAYS[e.day].slice(0, 3)} ${e.name}`)));
+  w.prep.forEach(id => { const r = S.baby.recipes.find(x => x.id === id); if (r) (r.ing || []).forEach(i => add(i, `Baby prep: ${r.name}`)); });
+  const list = [], onHand = [];
+  for (const it of map.values()) {
+    it.kit = kitchenMatch(it.text);
+    if (it.kit && it.kit.status !== 'have') it.low = it.kit.status;
+    if (w.have[it.key] || (it.kit && it.kit.status === 'have' && !w.need[it.key])) onHand.push(it); else list.push(it);
+  }
+  const used = new Set([...list, ...onHand].map(it => it.kit).filter(Boolean));
+  const restock = S.kitchen.items.filter(i => i.status !== 'have' && !used.has(i))
+    .map(i => ({ key: 'k:' + i.id, text: i.name, kit: i, low: i.status, meals: [] }));
+  return { list, onHand, restock, boxed: boxed.size };
+}
+function grocRow(it, w) {
+  const done = !!w.checked[it.key], pref = prefFor(it);
+  const sub = [it.low ? (it.low === 'out' ? 'Out in the kitchen' : 'Running low') : '', it.meals.slice(0, 3).join(' · ') + (it.meals.length > 3 ? ` +${it.meals.length - 3}` : ''), pref ? 'PC: ' + pref : ''].filter(Boolean).join(' · ');
+  return `<div class="li${done ? ' done' : ''}"><button class="check" data-check="${esc(it.key)}" aria-label="Check off ${esc(it.text)}">${done ? '✓' : ''}</button>`
+    + `<button class="gmain" data-check="${esc(it.key)}"><span class="main">${esc(it.text)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</span></button>`
+    + (it.meals.length > 1 ? `<span class="count">×${it.meals.length}</span>` : '')
+    + `<button class="x" data-gopt="${esc(it.key)}" aria-label="Options for ${esc(it.text)}">⋯</button></div>`;
 }
 function renderGroc() {
-  const w = week(), items = groceryItems();
-  const isDone = it => !!w.checked[it.key];
-  const sorted = [...items].sort((a, b) => isDone(a) - isDone(b) || a.text.localeCompare(b.text));
+  const w = week(), g = groceryData();
+  const byDone = (a, b) => !!w.checked[a.key] - !!w.checked[b.key] || a.text.localeCompare(b.text);
   const extras = [...w.extras].sort((a, b) => a.done - b.done);
-  const left = items.filter(i => !isDone(i)).length + extras.filter(x => !x.done).length;
+  const all = [...g.list, ...g.restock];
+  const left = all.filter(i => !w.checked[i.key]).length + extras.filter(x => !x.done).length;
+  const checkedN = all.filter(i => w.checked[i.key]).length + extras.filter(x => x.done).length;
   let html = `<div class="row"><input class="search" id="extraInput" placeholder="Add an item, like diapers or coffee" aria-label="Add grocery item" enterkeyhint="done"><button class="primary" id="addExtra">Add</button></div>`;
-  if (!items.length && !extras.length) {
-    html += `<div class="empty">Nothing on the list yet. Ingredients from this week’s meals show up here, or add items above.</div>`;
+  if (!all.length && !extras.length) {
+    html += `<div class="empty">Nothing to buy yet. Ingredients from this week’s meals and baby prep show up here, along with anything marked low in the Kitchen.</div>`;
   } else {
-    if (sorted.length) html += `<div class="group"><h3>From this week’s meals</h3><div class="list">`
-      + sorted.map(it => `<button class="li${isDone(it) ? ' done' : ''}" data-check="${esc(it.key)}"><span class="check">${isDone(it) ? '✓' : ''}</span><span class="main">${esc(it.text)}<span class="sub">${esc(it.meals.slice(0, 3).join(' · '))}${it.meals.length > 3 ? ` +${it.meals.length - 3}` : ''}</span></span>${it.meals.length > 1 ? `<span class="count">×${it.meals.length}</span>` : ''}</button>`).join('')
-      + '</div></div>';
+    if (g.list.length) html += `<div class="group"><h3>For this week’s meals</h3><div class="list">${[...g.list].sort(byDone).map(it => grocRow(it, w)).join('')}</div></div>`;
+    if (g.restock.length) html += `<div class="group"><h3>Restock · low or out in the kitchen</h3><div class="list">${[...g.restock].sort(byDone).map(it => grocRow(it, w)).join('')}</div></div>`;
     if (extras.length) html += `<div class="group"><h3>Extras</h3><div class="list">`
       + extras.map(x => `<div class="li${x.done ? ' done' : ''}"><button class="check" data-xcheck="${x.id}" aria-label="Check off ${esc(x.text)}">${x.done ? '✓' : ''}</button><span class="main">${esc(x.text)}</span><button class="x" data-xdel="${x.id}" aria-label="Remove ${esc(x.text)}">×</button></div>`).join('')
       + '</div></div>';
-    html += `<div class="actions"><button class="primary" id="copyList">Copy list (${left} left)</button><button class="ghostbtn" id="uncheckAll">Uncheck all</button></div>`;
+    html += `<div class="actions"><button class="primary" id="openPC">Send to PC Express (${left})</button><button class="ghostbtn" id="copyList">Copy list</button></div>`
+      + `<div class="actions">${checkedN ? `<button class="ghostbtn" id="putAway">Put away ${checkedN} checked</button>` : ''}<button class="ghostbtn" id="uncheckAll">Uncheck all</button></div>`;
   }
-  const n = items.hidden;
+  if (g.onHand.length) html += `<details class="onhand"><summary>Already have ${g.onHand.length} item${g.onHand.length > 1 ? 's' : ''} for this week’s meals</summary><div class="list">`
+    + g.onHand.sort((a, b) => a.text.localeCompare(b.text)).map(it => `<div class="li"><span class="main">${esc(it.text)}<span class="sub">${it.kit ? `In the ${it.kit.loc}${it.kit.qty ? ' · ' + esc(it.kit.qty) : ''}` : 'You said you have it'}</span></span><button class="mini" data-needit="${esc(it.key)}">Buy anyway</button></div>`).join('')
+    + '</div></details>';
+  const n = g.boxed;
   html += `<div class="group"><h3>Farm box this week</h3><div class="list"><button class="li" id="editBox"><span class="main">${w.box.length ? esc(w.box.join(', ')) : 'Nothing listed yet. Tap to add what came in the box.'}`
     + `<span class="sub">${n ? `${n} ingredient${n > 1 ? 's' : ''} left off the list because ${n > 1 ? 'they’re' : 'it’s'} in the box` : 'Box items are left off the grocery list'}</span></span><span class="count">Edit</span></button></div></div>`;
   $('#grocPanel').innerHTML = html;
 }
+function shoppingLines(withPrefs) {
+  const w = week(), g = groceryData();
+  return [...g.list, ...g.restock].filter(i => !w.checked[i.key])
+    .map(i => { const p = prefFor(i); return '- ' + i.text + (withPrefs && p ? ` [${p}]` : ''); })
+    .concat(w.extras.filter(x => !x.done).map(x => '- ' + x.text));
+}
+
+/* ---------- kitchen ---------- */
+function renderKitchen() {
+  const f = S.view.kfilter, q = norm(kitQuery);
+  let html = `<div class="row"><input class="search" id="kitInput" placeholder="Add an item, like rice or frozen peas" aria-label="Item name" value="${esc(kitQuery)}" enterkeyhint="done">`
+    + `<select class="sel" id="kitLoc" aria-label="Where it goes">${LOCS.map(([k, l]) => `<option value="${k}"${k === (LOCS.some(x => x[0] === f) ? f : kitLocDefault) ? ' selected' : ''}>${l}</option>`).join('')}</select>`
+    + `<button class="primary" id="kitAdd">Add</button></div>`
+    + `<div class="seg" role="group" aria-label="Show">${[['all','All'],...LOCS,['low','Low']].map(([k, l]) => `<button data-kf="${k}" aria-pressed="${f === k}">${l}</button>`).join('')}</div>`;
+  const items = S.kitchen.items.filter(i => (f === 'all' || f === 'low' ? true : i.loc === f) && (f !== 'low' || i.status !== 'have') && (!q || norm(i.name).includes(q)));
+  let any = false;
+  LOCS.forEach(([k, l]) => {
+    const list = items.filter(i => i.loc === k).sort((a, b) => a.name.localeCompare(b.name));
+    if (!list.length) return;
+    any = true;
+    html += `<div class="group"><h3>${l}</h3><div class="list">` + list.map(i =>
+      `<div class="li"><button class="gmain" data-kedit="${i.id}"><span class="main">${esc(i.name)}${i.qty || i.pc ? `<span class="sub">${esc([i.qty, i.pc ? 'PC: ' + i.pc : ''].filter(Boolean).join(' · '))}</span>` : ''}</span></button>`
+      + `<button class="stat s-${i.status}" data-kstat="${i.id}" aria-label="${esc(i.name)}: ${STATNAME[i.status]}. Tap to change">${STATNAME[i.status]}</button></div>`).join('') + '</div></div>';
+  });
+  if (!any) html += `<div class="empty">${q ? 'Nothing matches. Tap Add to start tracking it.' : f === 'low' ? 'Nothing is running low.' : 'Track what’s in your pantry, fridge and freezer. Items you have are left off the grocery list, and anything marked Low or Out is added to it.'}</div>`;
+  html += `<div class="actions"><button class="ghostbtn" id="kitBulk">Add several at once</button></div>`
+    + `<p class="note">Tap the label to switch between Have, Low and Out.</p>`;
+  $('#kitPanel').innerHTML = html;
+}
+let kitQuery = '', kitLocDefault = 'pantry';
+
+/* ---------- baby prep ---------- */
+const daysSince = k => Math.floor((new Date() - parseKey(k)) / 864e5);
+function ageText(k) { const d = daysSince(k); return d < 1 ? 'today' : d < 14 ? `${d} day${d > 1 ? 's' : ''} ago` : `${Math.floor(d / 7)} wks ago`; }
+function renderBaby() {
+  const w = week(), stash = [...S.baby.stash].sort((a, b) => a.made.localeCompare(b.made));
+  let html = `<div class="group"><div class="ghd"><h3>Freezer stash</h3><button class="mini" id="addStash">+ Batch</button></div>`;
+  html += stash.length ? `<div class="list">` + stash.map(s => {
+    const old = daysSince(s.made) > 90;
+    return `<div class="li"><button class="gmain" data-stash="${s.id}"><span class="main">${esc(s.name)}<span class="sub${old ? ' warn' : ''}">Made ${shortDate(s.made)} · ${ageText(s.made)}${old ? ' · use soon' : ''}</span></span></button>`
+      + `<div class="ctr"><button data-sdec="${s.id}" aria-label="Use one ${esc(s.name)}">−</button><b aria-label="portions left">${s.portions}</b><button data-sinc="${s.id}" aria-label="Add one ${esc(s.name)}">+</button></div></div>`;
+  }).join('') + '</div>' : `<div class="empty">Nothing in the baby freezer stash. When you batch-cook, tap Made it below or + Batch and the portions are counted here.</div>`;
+  html += '</div>';
+  const prep = w.prep.map(id => S.baby.recipes.find(r => r.id === id)).filter(Boolean);
+  html += `<div class="group"><h3>Prep this week</h3>`;
+  html += prep.length ? `<div class="list">` + prep.map(r => {
+    const made = w.prepDone[r.id];
+    return `<div class="li${made ? ' done' : ''}"><button class="gmain" data-brecipe="${r.id}"><span class="main">${esc(r.name)}<span class="sub">${esc((r.ing || []).join(', '))}</span></span></button>`
+      + (made ? `<span class="count">Made ✓</span>` : `<button class="mini on" data-made="${r.id}">Made it</button>`)
+      + `<button class="x" data-unprep="${r.id}" aria-label="Remove ${esc(r.name)} from this week">×</button></div>`;
+  }).join('') + '</div>' : `<div class="empty">Pick a recipe below to batch-cook this week. Its ingredients go on the grocery list.</div>`;
+  html += '</div>';
+  const recipes = [...S.baby.recipes].sort((a, b) => a.name.localeCompare(b.name));
+  html += `<div class="group"><div class="ghd"><h3>Baby prep recipes</h3><button class="mini" id="newBRecipe">+ Recipe</button></div><div class="list">`
+    + (recipes.length ? recipes.map(r => {
+      const on = w.prep.includes(r.id), inStash = S.baby.stash.filter(s => norm(s.name) === norm(r.name)).reduce((n, s) => n + s.portions, 0);
+      return `<div class="li"><button class="gmain" data-brecipe="${r.id}"><span class="main">${esc(r.name)}<span class="sub">${esc([r.yield, inStash ? `${inStash} in freezer` : ''].filter(Boolean).join(' · ') || 'Tap to add details')}</span></span></button>`
+        + (on ? `<span class="count">This week</span>` : `<button class="mini" data-prepadd="${r.id}">+ This week</button>`) + '</div>';
+    }).join('') : `<div class="li"><span class="main">No recipes yet.</span></div>`) + '</div></div>';
+  html += `<p class="note">Cook baby batches without added salt. Most purées and cooked dishes keep about 3 months in the freezer.</p>`;
+  $('#babyPanel').innerHTML = html;
+}
+
 function render() {
   renderHeader();
-  $('#vPlan').hidden = S.view.tab !== 'plan';
-  $('#vMeals').hidden = S.view.tab !== 'meals';
-  $('#vGroc').hidden = S.view.tab !== 'groc';
-  if (S.view.tab === 'plan') renderPlan();
-  if (S.view.tab === 'meals') renderMeals();
-  if (S.view.tab === 'groc') renderGroc();
+  const tab = S.view.tab;
+  [['plan','vPlan'],['meals','vMeals'],['groc','vGroc'],['kitchen','vKitchen'],['baby','vBaby']].forEach(([t, id]) => $('#' + id).hidden = tab !== t);
+  if (tab === 'plan') renderPlan();
+  if (tab === 'meals') renderMeals();
+  if (tab === 'groc') renderGroc();
+  if (tab === 'kitchen') renderKitchen();
+  if (tab === 'baby') renderBaby();
   renderTray();
 }
 
@@ -432,6 +623,7 @@ function upsertLib(name, tag, ing) {
   saveLib();
 }
 const parseIng = s => String(s || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+function setFav(name, on) { const m = findLib(name); if (m && !!m.fav !== on) { m.fav = on; saveLib(); } }
 
 /* ---------- toast ---------- */
 let toastT;
@@ -440,10 +632,11 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 /* ---------- sheet ---------- */
 let sheet = null; // {mode, day, slot, id, tag}
 function openSheet(s) { sheet = s; drawSheet(); $('#sheetwrap').hidden = false; $('#sheet').scrollTop = 0; setTimeout(() => { const n = $('#fName'); if (n && s.mode.startsWith('add')) n.focus(); }, 60); }
-function closeSheet() { sheet = null; $('#sheetwrap').hidden = true; $('#sheet').innerHTML = ''; }
+function closeSheet() { try { sheet?.ctl?.abort(); } catch {} sheet = null; $('#sheetwrap').hidden = true; $('#sheet').innerHTML = ''; }
 function drawSheet() {
   if (sheet.mode === 'import') return drawImport();
   if (sheet.mode === 'box') return drawBox();
+  if (EXTRA_SHEETS[sheet.mode]) return EXTRA_SHEETS[sheet.mode]();
   const s = sheet, entryMode = s.mode === 'add-entry' || s.mode === 'edit-entry';
   let e = { name: '', tag: S.view.filter === 'baby' ? 'baby' : 'family', ing: [], note: '' };
   if (s.mode === 'edit-entry') e = week().entries.find(x => x.id === s.id);
@@ -463,7 +656,11 @@ function drawSheet() {
   }
   h += `<div class="field"><label for="fIng">Ingredients for the grocery list</label><textarea id="fIng" placeholder="One per line, or separated by commas">${esc((e.ing || []).join('\n'))}</textarea></div>`;
   if (entryMode) h += `<div class="field"><label for="fNote">Note</label><input id="fNote" value="${esc(e.note || '')}" placeholder="e.g. cut into small pieces, recipe link"></div>`;
+  const libM = s.mode.endsWith('-lib') ? e : findLib(e.name);
+  if (!entryMode) h += `<div class="field"><label for="fRecipe">Recipe or link</label><textarea id="fRecipe" placeholder="Paste a link, or jot the steps">${esc(e.recipe || '')}</textarea></div>`;
+  else if (libM?.recipe) h += `<div class="field"><span class="lbl">Recipe</span><p class="note" style="text-align:left;white-space:pre-line;user-select:text">${esc(libM.recipe)}</p></div>`;
   if (s.mode === 'add-entry') h += `<label class="cb" id="saveLibRow"><input type="checkbox" id="fSaveLib" checked> Save to my meals</label>`;
+  h += `<label class="cb"><input type="checkbox" id="fFav"${libM?.fav ? ' checked' : ''}> ★ Keep in the rotation</label>`;
   h += `<div class="actions"><button class="primary" type="submit">${s.mode.startsWith('add') ? 'Add' : 'Save'}</button>`
     + (s.mode.startsWith('edit') ? `<button class="danger" type="button" id="fDelete">Delete</button>` : `<button class="ghostbtn" type="button" id="fCancel">Cancel</button>`) + `</div>`;
   if (s.mode === 'edit-entry') h += `<p class="note">Changes to ingredients also update this meal in Saved meals.</p>`;
@@ -489,6 +686,7 @@ $('#sheetwrap').addEventListener('click', ev => {
     drawSugg();
   }
   if (t.id === 'fCancel') closeSheet();
+  if (extraSheetClick(t)) return;
   if (t.id === 'copyPrompt') copyText(CLAUDE_FORMAT, 'Instructions copied. Paste them into your Claude chat.');
   if (t.id === 'fDelete') {
     if (t.dataset.confirm) {
@@ -503,6 +701,7 @@ $('#sheetwrap').addEventListener('change', ev => { if (ev.target.id === 'fStart'
 $('#sheetwrap').addEventListener('submit', ev => {
   ev.preventDefault();
   if (sheet.mode === 'import') return runImport();
+  if (EXTRA_SUBMIT[sheet.mode]) return EXTRA_SUBMIT[sheet.mode]();
   if (sheet.mode === 'box') {
     week().box = [...new Map(parseIng($('#fBox').value).map(b => [itemKey(b), b])).values()];
     saveWeek(); closeSheet(); render(); return;
@@ -516,7 +715,8 @@ $('#sheetwrap').addEventListener('submit', ev => {
     const lib = findLib(name);
     if (lib && !ing.length) week().entries.at(-1).ing = [...lib.ing];
     if (lib) { if (ing.length) { lib.ing = ing; saveLib(); } }
-    else if ($('#fSaveLib').checked) upsertLib(name, tag, ing);
+    else if ($('#fSaveLib').checked || $('#fFav').checked) upsertLib(name, tag, ing);
+    setFav(name, $('#fFav').checked);
   } else if (sheet.mode === 'edit-entry') {
     const e = week().entries.find(x => x.id === sheet.id), w = week();
     const day = +$('#fDay').value, slot = $('#fSlot').value, moved = day !== e.day || slot !== e.slot;
@@ -524,12 +724,14 @@ $('#sheetwrap').addEventListener('submit', ev => {
     if (moved) { w.entries = w.entries.filter(x => x !== e); w.entries.push(e); }
     saveWeek();
     const lib = findLib(name); if (lib && ing.length) { lib.ing = ing; saveLib(); }
+    if ($('#fFav').checked && !lib) upsertLib(name, tag, ing);
+    setFav(name, $('#fFav').checked);
   } else if (sheet.mode === 'add-lib') {
     if (findLib(name)) { toast('You already have a meal with that name'); return; }
-    S.library.meals.push({ id: uidGen(), name, tag, ing }); saveLib();
+    S.library.meals.push({ id: uidGen(), name, tag, ing, recipe: $('#fRecipe').value.trim(), fav: $('#fFav').checked }); saveLib();
   } else {
     const m = S.library.meals.find(x => x.id === sheet.id);
-    Object.assign(m, { name, tag, ing }); saveLib();
+    Object.assign(m, { name, tag, ing, recipe: $('#fRecipe').value.trim(), fav: $('#fFav').checked }); saveLib();
   }
   closeSheet(); render();
 });
@@ -684,6 +886,329 @@ async function runImport() {
   toast(`Imported ${p.meals} meals into ${keys.length > 1 ? `${weekRange(keys[0]).split(' – ')[0]} – ${weekRange(keys.at(-1)).split(' – ').pop()}` : weekRange(keys[0])}`);
 }
 
+/* ---------- more sheets ---------- */
+const form = (title, body, submit = 'Save', del = false) => `<div class="grab"></div><h2>${esc(title)}</h2><form class="form" id="sheetForm" autocomplete="off">${body}`
+  + `<div class="actions"><button class="primary" type="submit">${submit}</button>${del ? `<button class="danger" type="button" id="xDelete">Delete</button>` : `<button class="ghostbtn" type="button" id="fCancel">Cancel</button>`}</div></form>`;
+const fieldIn = (id, label, val, ph = '', type = 'text') => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${esc(val ?? '')}" placeholder="${esc(ph)}"></div>`;
+const fieldTa = (id, label, val, ph = '') => `<div class="field"><label for="${id}">${label}</label><textarea id="${id}" placeholder="${esc(ph)}">${esc(val ?? '')}</textarea></div>`;
+const fieldSel = (id, label, opts, val) => `<div class="field"><label for="${id}">${label}</label><select id="${id}">${opts.map(([k, l]) => `<option value="${k}"${k === val ? ' selected' : ''}>${l}</option>`).join('')}</select></div>`;
+const STATS = [['have','Have it'],['low','Running low'],['out','Out']];
+const sh = html => { $('#sheet').innerHTML = html; };
+const allGroc = () => { const g = groceryData(); return [...g.list, ...g.restock, ...g.onHand]; };
+
+const EXTRA_SHEETS = {
+  ideas() {
+    sh(form('Ideas for this week', fieldTa('fIdeas', 'What are you in the mood for?', week().ideas, 'e.g. Something with the squash from the box. Want to try a new curry. Busy Wednesday, so slow cooker. Use up the frozen shrimp.')
+      + `<p class="note" style="text-align:left">${sampleFn ? 'When you tap ✦ Plan, Claude builds the week around these ideas, what’s in the kitchen and your rotation.' : 'These notes stay with this week.'}</p>`));
+  },
+  kitem() {
+    const i = S.kitchen.items.find(x => x.id === sheet.id) || { name: sheet.name || '', loc: sheet.loc || 'pantry', qty: '', status: 'have', pc: '' };
+    sh(form(sheet.id ? 'Edit kitchen item' : 'Add to kitchen', fieldIn('kName', 'Item', i.name, 'e.g. Basmati rice')
+      + `<div class="two">${fieldSel('kLoc', 'Where', LOCS, i.loc)}${fieldSel('kStat', 'Status', STATS, i.status)}</div>`
+      + fieldIn('kQty', 'How much (optional)', i.qty, 'e.g. 2 bags, half a jar')
+      + fieldIn('kPc', 'PC Express product (optional)', i.pc, 'e.g. PC Organics Basmati Rice 2kg')
+      + `<p class="note" style="text-align:left">The product name helps Claude pick the right item when filling your PC Express cart.</p>`, sheet.id ? 'Save' : 'Add', !!sheet.id));
+  },
+  kbulk() {
+    sh(form('Add several items', fieldSel('kbLoc', 'Where they go', LOCS, LOCS.some(l => l[0] === S.view.kfilter) ? S.view.kfilter : 'pantry')
+      + fieldTa('kbList', 'Items', '', 'One per line, or separated by commas\nRice\nCanned chickpeas\nFrozen peas'), 'Add all'));
+  },
+  stash() {
+    const st = S.baby.stash.find(x => x.id === sheet.id) || { name: '', portions: 6, made: ymd(new Date()) };
+    const names = S.baby.recipes.map(r => `<option value="${esc(r.name)}">`).join('');
+    sh(form(sheet.id ? 'Edit freezer batch' : 'Add a freezer batch', `<div class="field"><label for="sName">What</label><input id="sName" list="sNames" value="${esc(st.name)}" placeholder="e.g. Low-salt bolognese"><datalist id="sNames">${names}</datalist></div>`
+      + `<div class="two">${fieldIn('sPortions', 'Portions', st.portions, '', 'number')}${fieldIn('sMade', 'Made on', st.made, '', 'date')}</div>`, sheet.id ? 'Save' : 'Add', !!sheet.id));
+  },
+  brecipe() {
+    const r = S.baby.recipes.find(x => x.id === sheet.id) || { name: '', ing: [], yield: '', note: '' };
+    sh(form(sheet.id ? 'Baby prep recipe' : 'New baby prep recipe', fieldIn('bName', 'Recipe', r.name, 'e.g. Sweet potato & lentil fritters')
+      + fieldTa('bIng', 'Ingredients for the grocery list', (r.ing || []).join('\n'), 'One per line')
+      + fieldIn('bYield', 'Makes', r.yield, 'e.g. 12 muffins, 8 portions')
+      + fieldTa('bNote', 'Method and notes', r.note, 'Steps, freezing and reheating tips'), sheet.id ? 'Save' : 'Add', !!sheet.id));
+  },
+  made() {
+    const r = S.baby.recipes.find(x => x.id === sheet.id); if (!r) return closeSheet();
+    const n = parseInt(r.yield, 10) || 8;
+    sh(form(`Made ${r.name}`, `<div class="two">${fieldIn('mPortions', 'Portions going in the freezer', n, '', 'number')}${fieldIn('mMade', 'Made on', ymd(new Date()), '', 'date')}</div>`, 'Add to freezer stash'));
+  },
+  gitem() {
+    const it = allGroc().find(x => x.key === sheet.key); if (!it) return closeSheet();
+    const tracked = it.kit ? `Tracked in the ${it.kit.loc}: ${STATNAME[it.kit.status].toLowerCase()}.` : 'Not tracked in the Kitchen.';
+    sh(form(it.text, fieldIn('gPc', 'PC Express product', prefFor(it), 'e.g. Neilson 2% Milk 4L')
+      + `<p class="note" style="text-align:left">${esc(tracked)} Saved products are included when you send the list to PC Express.</p>`
+      + (it.key.startsWith('k:') ? '' : `<label class="cb"><input type="checkbox" id="gHave"${week().have[it.key] ? ' checked' : ''}> We already have this for this week</label>`)
+      + (it.kit ? '' : `<label class="cb"><input type="checkbox" id="gTrack"> Track it in the Kitchen</label>${fieldSel('gLoc', 'Where it lives', LOCS, 'pantry')}`)));
+  },
+  putaway() {
+    const w = week(), g = groceryData();
+    const bought = [...g.list, ...g.restock].filter(i => w.checked[i.key]).map(i => ({ text: i.text, key: i.key, kit: i.kit }))
+      .concat(w.extras.filter(x => x.done).map(x => ({ text: x.text, key: 'x:' + x.id, kit: kitchenMatch(x.text) })));
+    sheet.items = bought;
+    const known = bought.filter(b => b.kit), fresh = bought.filter(b => !b.kit);
+    let body = '';
+    if (known.length) body += `<div class="field"><span class="lbl">Back in stock</span><p class="note" style="text-align:left">${esc(known.map(b => b.text).join(', '))} will be marked as Have.</p></div>`;
+    if (fresh.length) body += `<div class="field"><span class="lbl">Start tracking these?</span><div class="list">`
+      + fresh.map((b, i) => `<div class="li"><span class="main">${esc(b.text)}</span><select class="sel" data-pa="${i}" aria-label="Where ${esc(b.text)} goes"><option value="">Don’t track</option>${LOCS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>`).join('')
+      + `</div><p class="note" style="text-align:left">Fresh produce you’ll use this week usually doesn’t need tracking.</p></div>`;
+    sh(form('Put groceries away', body || '<p class="note">Nothing checked yet.</p>', 'Done'));
+  },
+  pc() {
+    const lines = shoppingLines(true);
+    sheet.list = lines.join('\n');
+    sheet.prompt = PC_PROMPT + '\n\n' + sheet.list;
+    sh(`<div class="grab"></div><h2>Send to PC Express</h2><div class="form steps">
+      <p class="note" style="text-align:left">PC Express doesn’t offer a way for other apps to fill your cart, so there’s no automatic push. The quickest route is to let Claude fill it in your browser.</p>
+      <div class="step"><span class="lbl">Option 1 · Claude in Chrome (fills the cart for you)</span>
+        <p>Sign in at pcexpress.ca in Chrome and pick your store and time. Then open Claude in Chrome and paste these instructions. Claude searches each item and adds it to your cart. It stops before checkout so you can review.</p>
+        <button type="button" class="primary" id="copyPcPrompt">Copy instructions for Claude (${lines.length} items)</button></div>
+      <div class="step"><span class="lbl">Option 2 · Do it yourself</span>
+        <p>Copy the list and search the items in the PC Express app.</p>
+        <textarea class="copybox" readonly aria-label="Grocery list">${esc(sheet.list)}</textarea>
+        <button type="button" class="ghostbtn" id="copyPlain">Copy list</button></div>
+      <div class="actions"><button type="button" class="ghostbtn" id="fCancel">Close</button></div></div>`);
+  },
+  planner: drawPlanner,
+};
+const PC_PROMPT = `Please fill my PC Express cart from the grocery list below.
+- Use pcexpress.ca in this browser. I'm already signed in with my store and pickup or delivery time chosen.
+- For each item, search for it and add 1 unless a quantity is given. When a product is named in [brackets], choose that exact product. Otherwise choose a sensible everyday size for two adults and a toddler, and prefer products I've bought before if the site shows them.
+- If an item is unavailable, choose a close substitute and note it.
+- Do not check out, book a time slot or change my payment or address. Stop once everything is in the cart.
+- Finish with a short summary: what you added, any substitutions, and anything you couldn't find.
+
+Grocery list:`;
+
+const EXTRA_SUBMIT = {
+  ideas() { week().ideas = $('#fIdeas').value.trim(); saveWeek(); closeSheet(); render(); },
+  kitem() {
+    const name = $('#kName').value.trim(); if (!name) return $('#kName').focus();
+    const data = { name, loc: $('#kLoc').value, status: $('#kStat').value, qty: $('#kQty').value.trim(), pc: $('#kPc').value.trim() };
+    const i = S.kitchen.items.find(x => x.id === sheet.id);
+    if (i) Object.assign(i, data);
+    else { const dup = kitchenMatch(name); if (dup) { toast(`${dup.name} is already in the ${dup.loc}`); return; } S.kitchen.items.push({ id: uidGen(), ...data }); }
+    saveKit(); closeSheet(); render();
+  },
+  kbulk() {
+    const loc = $('#kbLoc').value; let added = 0, restocked = 0;
+    parseIng($('#kbList').value).forEach(name => {
+      const ex = kitchenMatch(name);
+      if (ex) { if (ex.status !== 'have') { ex.status = 'have'; restocked++; } }
+      else { S.kitchen.items.push({ id: uidGen(), name, loc, status: 'have', qty: '', pc: '' }); added++; }
+    });
+    saveKit(); closeSheet(); render();
+    toast(`Added ${added} item${added === 1 ? '' : 's'}${restocked ? `, restocked ${restocked}` : ''}`);
+  },
+  stash() {
+    const name = $('#sName').value.trim(); if (!name) return $('#sName').focus();
+    const data = { name, portions: Math.max(0, parseInt($('#sPortions').value, 10) || 0), made: $('#sMade').value || ymd(new Date()) };
+    const st = S.baby.stash.find(x => x.id === sheet.id);
+    if (st) Object.assign(st, data); else S.baby.stash.push({ id: uidGen(), ...data });
+    S.baby.stash = S.baby.stash.filter(x => x.portions > 0);
+    saveBaby(); closeSheet(); render();
+  },
+  brecipe() {
+    const name = $('#bName').value.trim(); if (!name) return $('#bName').focus();
+    const data = { name, ing: parseIng($('#bIng').value), yield: $('#bYield').value.trim(), note: $('#bNote').value.trim() };
+    const r = S.baby.recipes.find(x => x.id === sheet.id);
+    if (r) Object.assign(r, data); else S.baby.recipes.push({ id: uidGen(), ...data });
+    saveBaby(); closeSheet(); render();
+  },
+  made() {
+    const r = S.baby.recipes.find(x => x.id === sheet.id), n = Math.max(0, parseInt($('#mPortions').value, 10) || 0);
+    if (n) S.baby.stash.push({ id: uidGen(), name: r.name, portions: n, made: $('#mMade').value || ymd(new Date()) });
+    week().prepDone[r.id] = true; saveWeek(); saveBaby(); closeSheet(); render();
+    toast(n ? `${n} portions of ${r.name} added to the freezer stash` : 'Marked as made');
+  },
+  gitem() {
+    const it = allGroc().find(x => x.key === sheet.key), w = week(); if (!it) return closeSheet();
+    const pc = $('#gPc').value.trim();
+    if ($('#gTrack')?.checked) { it.kit = { id: uidGen(), name: it.text, loc: $('#gLoc').value, status: 'out', qty: '', pc: '' }; S.kitchen.items.push(it.kit); }
+    if (it.kit) it.kit.pc = pc;
+    else { const k = itemKey(it.text); if (pc) S.kitchen.prefs[k] = pc; else delete S.kitchen.prefs[k]; }
+    const hv = $('#gHave');
+    if (hv) { if (hv.checked) { w.have[it.key] = true; delete w.need[it.key]; } else delete w.have[it.key]; }
+    saveKit(); saveWeek(); closeSheet(); render();
+  },
+  putaway() {
+    const w = week(); let restocked = 0, added = 0;
+    (sheet.items || []).forEach((b, idx) => {
+      if (b.kit) { if (b.kit.status !== 'have') { b.kit.status = 'have'; restocked++; } }
+      else {
+        const loc = document.querySelector(`[data-pa="${idx}"]`)?.value;
+        if (loc) { S.kitchen.items.push({ id: uidGen(), name: b.text, loc, status: 'have', qty: '', pc: S.kitchen.prefs[itemKey(b.text)] || '' }); added++; }
+      }
+      if (b.key.startsWith('k:')) delete w.checked[b.key];
+    });
+    saveKit(); saveWeek(); closeSheet(); render();
+    toast(restocked || added ? `Kitchen updated: ${restocked} restocked, ${added} new` : 'Nothing to update');
+  },
+  planner() { runPlanner(); },
+};
+function extraSheetClick(t) {
+  if (t.id === 'xDelete') {
+    if (!t.dataset.confirm) { t.dataset.confirm = '1'; t.textContent = 'Tap again to delete'; return true; }
+    if (sheet.mode === 'kitem') { S.kitchen.items = S.kitchen.items.filter(x => x.id !== sheet.id); saveKit(); }
+    if (sheet.mode === 'stash') { S.baby.stash = S.baby.stash.filter(x => x.id !== sheet.id); saveBaby(); }
+    if (sheet.mode === 'brecipe') { S.baby.recipes = S.baby.recipes.filter(x => x.id !== sheet.id); saveBaby(); }
+    closeSheet(); render(); toast('Deleted'); return true;
+  }
+  if (t.id === 'copyPcPrompt') { copyText(sheet.prompt, 'Copied. Paste it into Claude in Chrome.'); return true; }
+  if (t.id === 'copyPlain') { copyText(sheet.list, 'List copied'); return true; }
+  if (t.id === 'plStop') { sheet.ctl?.abort(); return true; }
+  if (t.id === 'plAgain') { sheet.step = 'form'; drawPlanner(); return true; }
+  if (t.id === 'plUse') { applyPlan(); return true; }
+  return false;
+}
+
+/* ---------- plan with Claude ---------- */
+function drawPlanner() {
+  const s = sheet, w = week();
+  s.opt ||= { ideas: w.ideas, slots: ['l', 'd'], fresh: 2, keep: true, baby: true };
+  const o = s.opt;
+  if (!s.step || s.step === 'form') {
+    s.step = 'form';
+    const kc = S.kitchen.items.filter(i => i.status !== 'out').length, favs = S.library.meals.filter(m => m.fav).length;
+    sh(form(`Plan ${weekRange(S.view.week)} with Claude`,
+      fieldTa('plIdeas', 'Ideas and cravings', o.ideas, 'e.g. Use up the frozen shrimp, something cozy for Sunday, try a new lentil dish')
+      + `<div class="field"><span class="lbl">Fill in</span>${SLOTS.map(([k, l]) => `<label class="cb"><input type="checkbox" data-plslot="${k}"${o.slots.includes(k) ? ' checked' : ''}> ${l}s</label>`).join('')}</div>`
+      + fieldSel('plFresh', 'New recipes to try', [0, 1, 2, 3, 4].map(n => [String(n), n === 0 ? 'None, just our favourites' : `${n} new`]), String(o.fresh))
+      + (w.entries.length ? `<label class="cb"><input type="checkbox" id="plKeep"${o.keep ? ' checked' : ''}> Keep the ${w.entries.length} meal${w.entries.length > 1 ? 's' : ''} already planned</label>` : '')
+      + `<label class="cb"><input type="checkbox" id="plBaby"${o.baby ? ' checked' : ''}> Suggest baby freezer prep</label>`
+      + `<p class="note" style="text-align:left">Claude sees ${kc} kitchen item${kc === 1 ? '' : 's'}, ${favs} rotation favourite${favs === 1 ? '' : 's'}, the farm box and the baby stash. It cooks low-salt for your toddler. This uses your Claude usage and takes about a minute.</p>`,
+      'Make my plan'));
+    return;
+  }
+  if (s.step === 'busy') {
+    sh(`<div class="grab"></div><h2>Planning your week…</h2><div class="busy"><div class="spin"></div><span id="plStatus">${esc(s.status || 'Thinking…')}</span></div><div class="actions"><button type="button" class="ghostbtn" id="plStop">Stop</button></div>`);
+    return;
+  }
+  if (s.step === 'error') {
+    sh(`<div class="grab"></div><h2>Couldn’t make a plan</h2><div class="preview bad">${esc(s.err)}</div><div class="actions" style="margin-top:14px"><button type="button" class="primary" id="plAgain">Back</button><button type="button" class="ghostbtn" id="fCancel">Close</button></div>`);
+    return;
+  }
+  const r = s.result;
+  let h = `<div class="grab"></div><h2>Your plan</h2><div class="form">`;
+  if (r.summary) h += `<div class="summary">${esc(r.summary)}</div>`;
+  h += '<div>';
+  DAYS.forEach((dn, di) => {
+    const ms = r.meals.filter(m => m.day === di).sort((a, b) => 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot));
+    if (!ms.length) return;
+    h += `<p class="pday">${dn}</p>` + ms.map(m => `<div class="pm"><span class="s">${slotName(m.slot)}</span><span class="n">${esc(m.name)}<span class="badge t-${m.tag}">${TAGNAME[m.tag]}</span>${m.isNew ? '<span class="badge t-both">New</span>' : ''}${m.note ? `<small>${esc(m.note)}</small>` : ''}</span></div>`).join('');
+  });
+  h += '</div>';
+  if (r.babyPrep.length) h += `<div class="field"><span class="lbl">Baby freezer prep</span>` + r.babyPrep.map((b, i) => `<label class="cb"><input type="checkbox" data-bp="${i}" checked> <span>${esc(b.name)}${b.yield ? ` · ${esc(b.yield)}` : ''}${b.note ? `<span class="sub" style="display:block;font-size:.78rem;color:var(--muted)">${esc(b.note)}</span>` : ''}</span></label>`).join('') + '</div>';
+  h += `<label class="cb"><input type="checkbox" id="plSaveNew" checked> Add new meals to Saved meals</label>`;
+  h += `<div class="actions"><button type="button" class="primary" id="plUse">Use this plan</button><button type="button" class="ghostbtn" id="plAgain">Change and retry</button></div></div>`;
+  sh(h);
+}
+function plannerPrompt(o) {
+  const wk = S.view.week, w = week(), prev = S.weeks[ymd(addDays(parseKey(wk), -7))];
+  const kit = loc => S.kitchen.items.filter(i => i.loc === loc && i.status !== 'out').map(i => i.name + (i.qty ? ` (${i.qty})` : '') + (i.status === 'low' ? ' [low]' : '')).join('; ') || 'nothing listed';
+  const favs = S.library.meals.filter(m => m.fav).map(m => `- ${m.name} [${m.tag}]${m.last ? ` (last planned week of ${m.last})` : ' (not planned recently)'}: ${m.ing.join(', ')}`);
+  const others = S.library.meals.filter(m => !m.fav).slice(0, 60).map(m => m.name);
+  const recent = prev ? [...new Set(prev.entries.map(e => e.name))] : [];
+  const kept = o.keep ? w.entries.map(e => `- ${DAYS[e.day]} ${slotName(e.slot).toLowerCase()}: ${e.name} [${e.tag}]`) : [];
+  const stash = S.baby.stash.filter(s => s.portions > 0).map(s => `${s.name} (${s.portions} portions)`);
+  const slots = o.slots.map(k => slotName(k).toLowerCase() + 's').join(', ');
+  return `You are planning a week of home cooking for a family of two adults and a 14-month-old toddler. The toddler is a great eater and eats what the adults eat, including leftovers, but needs low salt: cook shared dishes with little or no added salt and season the adult portions after setting the toddler's portion aside. Keep toddler safety in mind (soft textures, small pieces, quartered grapes and cherry tomatoes, no whole nuts).
+
+Week: ${weekRange(wk)} (Monday to Sunday). We live in Canada and shop at Loblaw / PC Express.
+Plan: ${slots} for all 7 days.${kept.length ? `\nAlready planned. Keep these and only fill the empty slots:\n${kept.join('\n')}` : ''}
+
+WHAT WE HAVE (use these first, especially freezer items and anything marked [low] or perishable):
+Pantry: ${kit('pantry')}
+Fridge: ${kit('fridge')}
+Freezer: ${kit('freezer')}
+Farm box produce this week: ${w.box.join(', ') || 'none listed'}
+Baby freezer stash (ready-made toddler portions; use them for toddler meals when the adults eat something unsuitable): ${stash.join('; ') || 'empty'}
+
+OUR ROTATION (meals we love; include several, favouring ones not planned recently):
+${favs.join('\n') || 'none yet'}
+Other saved meals we have made: ${others.join('; ') || 'none'}
+Planned last week (avoid repeating): ${recent.join('; ') || 'unknown'}
+New recipes to try this week: ${o.fresh} (set "isNew": true on them)
+Our ideas and cravings for this week: ${o.ideas ? `"${o.ideas}"` : 'none given'}
+
+GUIDELINES
+- Keep weeknight dinners realistic (most under 45 minutes). Save bigger cooks for the weekend.
+- Lunches should mostly be leftovers from the previous night's dinner. Name them "Leftover <dinner name>" with an empty ingredient list.
+- Breakfasts can repeat and should be quick.
+- Tags: "both" when the whole family eats it (the usual case), "family" for adults only, "baby" for a toddler-only meal. When the adults' meal is unsuitable for the toddler, add a separate "baby" meal in the same slot.
+- For every "both" dinner, the note says in a few words how to adapt it for the toddler (e.g. "Set aside toddler portion before adding chili flakes").
+- Ingredients: simple grocery names, no amounts, using the same names as WHAT WE HAVE when it's the same thing. List every ingredient the dish needs, including ones we already have. The app subtracts what's on hand.
+- When you reuse a saved meal, use its name exactly.
+${o.baby ? `- Suggest 1 or 2 toddler freezer batch-prep recipes for this week (ideas: oatmeal cups, egg muffins, low-salt bolognese, veggie meatballs, fritters, muffins), favouring what's missing or low in the baby stash. Our saved baby prep recipes: ${S.baby.recipes.map(r => r.name).join('; ') || 'none'}. Reuse a saved name exactly if suggesting one.` : '- Leave babyPrep as an empty array.'}
+
+Reply with only JSON in exactly this shape:
+{"summary": "one or two sentences on the week's approach", "meals": [{"day": 0, "slot": "d", "name": "Meal name", "tag": "both", "ing": ["ingredient"], "note": "short tip", "isNew": false}], "babyPrep": [{"name": "Recipe name", "ing": ["ingredient"], "yield": "12 muffins", "note": "short method and freezing tip"}]}
+day is 0 for Monday through 6 for Sunday. slot is "b" for breakfast, "l" for lunch, "d" for dinner.`;
+}
+const PLAN_ERR = {
+  not_granted: 'Claude wasn’t allowed for this page. You can still plan by hand, or use Import to paste a plan from a Claude chat.',
+  rate_limited: 'Claude is busy right now. Wait a minute and try again.',
+  invalid_json: 'Claude’s answer didn’t come through in a form the app can read. Try again.',
+  empty_completion: 'Claude didn’t return a plan. Try again.',
+  prompt_too_large: 'There’s too much kitchen and meal data to send at once. Remove a few old saved meals or kitchen items and try again.',
+};
+async function runPlanner() {
+  const s = sheet, o = s.opt;
+  o.ideas = $('#plIdeas').value.trim();
+  o.slots = [...document.querySelectorAll('[data-plslot]')].filter(c => c.checked).map(c => c.dataset.plslot);
+  o.fresh = +$('#plFresh').value; o.keep = $('#plKeep') ? $('#plKeep').checked : true; o.baby = $('#plBaby').checked;
+  if (!o.slots.length) { toast('Pick at least one meal to fill in'); return; }
+  const w = week(); if (w.ideas !== o.ideas) { w.ideas = o.ideas; saveWeek(); }
+  await loadDoc(weekDocKey(ymd(addDays(parseKey(S.view.week), -7)))).catch(() => {});
+  if (sheet !== s) return;
+  s.step = 'busy'; s.status = 'Thinking…'; s.ctl = new AbortController(); drawPlanner();
+  try {
+    const raw = await sampleFn.json(plannerPrompt(o), {
+      signal: s.ctl.signal, modelTier: 'default',
+      onText: () => { if (s.status !== 'Writing your plan…') { s.status = 'Writing your plan…'; const n = $('#plStatus'); if (n && sheet === s) n.textContent = s.status; } },
+    });
+    if (sheet !== s) return;
+    const r = cleanPlan(raw, o);
+    if (!r.meals.length) throw { code: 'empty_completion' };
+    s.result = r; s.step = 'preview';
+  } catch (e) {
+    if (sheet !== s) return;
+    if (e && e.code === 'cancelled') { s.step = 'form'; }
+    else { s.step = 'error'; s.err = PLAN_ERR[e && e.code] || 'Couldn’t reach Claude right now. Try again in a little while.'; }
+  }
+  s.ctl = null; drawPlanner();
+}
+function cleanPlan(raw, o) {
+  const strs = a => Array.isArray(a) ? a.map(x => String(x || '').trim()).filter(Boolean).slice(0, 30) : [];
+  const meals = (Array.isArray(raw?.meals) ? raw.meals : []).map(m => ({
+    day: Number.isInteger(+m.day) ? +m.day : -1, slot: String(m.slot || '').toLowerCase()[0],
+    name: String(m.name || '').trim().slice(0, 120), tag: TAGNAME[m.tag] ? m.tag : 'both',
+    ing: strs(m.ing), note: String(m.note || '').trim().slice(0, 240), isNew: !!m.isNew,
+  })).filter(m => m.day >= 0 && m.day < 7 && 'bld'.includes(m.slot) && m.slot && m.name);
+  const babyPrep = o.baby && Array.isArray(raw?.babyPrep) ? raw.babyPrep.slice(0, 3).map(b => ({
+    name: String(b.name || '').trim().slice(0, 120), ing: strs(b.ing), yield: String(b.yield || '').trim().slice(0, 60), note: String(b.note || '').trim().slice(0, 400),
+  })).filter(b => b.name) : [];
+  return { summary: String(raw?.summary || '').trim().slice(0, 500), meals, babyPrep };
+}
+function applyPlan() {
+  const s = sheet, r = s.result, o = s.opt, w = week();
+  if (!o.keep) w.entries = w.entries.filter(e => !o.slots.includes(e.slot));
+  r.meals.forEach(m => w.entries.push({ id: uidGen(), day: m.day, slot: m.slot, name: m.name, tag: m.tag, ing: m.ing, note: m.note }));
+  if ($('#plSaveNew').checked) {
+    let added = 0;
+    r.meals.forEach(m => { if (!/^leftover/i.test(m.name) && !findLib(m.name)) { S.library.meals.push({ id: uidGen(), name: m.name, tag: m.tag, ing: [...m.ing] }); added++; } });
+    if (added) saveLib();
+  }
+  let preps = 0;
+  r.babyPrep.forEach((b, i) => {
+    if (!document.querySelector(`[data-bp="${i}"]`)?.checked) return;
+    let rec = S.baby.recipes.find(x => norm(x.name) === norm(b.name));
+    if (!rec) { rec = { id: uidGen(), ...b }; S.baby.recipes.push(rec); }
+    if (!w.prep.includes(rec.id)) { w.prep.push(rec.id); preps++; }
+  });
+  if (preps) saveBaby();
+  saveWeek(); closeSheet(); S.view.tab = 'plan'; window.scrollTo(0, 0); render();
+  toast(`Added ${r.meals.length} meals${preps ? ` and ${preps} baby prep` : ''}. Your grocery list is updated.`);
+}
+
 /* ---------- clicks ---------- */
 let suppressClick = false;
 document.addEventListener('click', ev => {
@@ -702,6 +1227,32 @@ document.addEventListener('click', ev => {
   if (t.id === 'trayToggle') { S.view.trayOpen = !S.view.trayOpen; cacheLocal(); renderTray(); return; }
   if (t.id === 'newMeal') { openSheet({ mode: 'add-lib' }); return; }
   if (t.id === 'openImport') { openSheet({ mode: 'import' }); return; }
+  if (t.id === 'openPlanner') { openSheet({ mode: 'planner' }); return; }
+  if (t.id === 'editIdeas') { openSheet({ mode: 'ideas' }); return; }
+  if (t.dataset.mf) { S.view.mfilter = t.dataset.mf; cacheLocal(); render(); return; }
+  if (t.dataset.star) { const m = S.library.meals.find(x => x.id === t.dataset.star); m.fav = !m.fav; saveLib(); render(); toast(m.fav ? `${m.name} is in the rotation` : `${m.name} removed from the rotation`); return; }
+  if (t.dataset.kf) { S.view.kfilter = t.dataset.kf; cacheLocal(); render(); return; }
+  if (t.id === 'kitAdd') { addKitchen(); return; }
+  if (t.id === 'kitBulk') { openSheet({ mode: 'kbulk' }); return; }
+  if (t.dataset.kedit) { openSheet({ mode: 'kitem', id: t.dataset.kedit }); return; }
+  if (t.dataset.kstat) { const i = S.kitchen.items.find(x => x.id === t.dataset.kstat); i.status = { have: 'low', low: 'out', out: 'have' }[i.status] || 'have'; saveKit(); render(); return; }
+  if (t.id === 'addStash') { openSheet({ mode: 'stash' }); return; }
+  if (t.dataset.stash) { openSheet({ mode: 'stash', id: t.dataset.stash }); return; }
+  if (t.dataset.sdec || t.dataset.sinc) {
+    const st = S.baby.stash.find(x => x.id === (t.dataset.sdec || t.dataset.sinc)); if (!st) return;
+    st.portions += t.dataset.sinc ? 1 : -1;
+    if (st.portions <= 0) { S.baby.stash = S.baby.stash.filter(x => x !== st); toast(`${st.name} is used up`); }
+    saveBaby(); render(); return;
+  }
+  if (t.id === 'newBRecipe') { openSheet({ mode: 'brecipe' }); return; }
+  if (t.dataset.brecipe) { openSheet({ mode: 'brecipe', id: t.dataset.brecipe }); return; }
+  if (t.dataset.made) { openSheet({ mode: 'made', id: t.dataset.made }); return; }
+  if (t.dataset.prepadd) { const w = week(); if (!w.prep.includes(t.dataset.prepadd)) w.prep.push(t.dataset.prepadd); saveWeek(); render(); toast('Added to this week. Ingredients are on the grocery list.'); return; }
+  if (t.dataset.unprep) { const w = week(); w.prep = w.prep.filter(x => x !== t.dataset.unprep); delete w.prepDone[t.dataset.unprep]; saveWeek(); render(); return; }
+  if (t.dataset.gopt) { openSheet({ mode: 'gitem', key: t.dataset.gopt }); return; }
+  if (t.dataset.needit) { const w = week(); w.need[t.dataset.needit] = true; delete w.have[t.dataset.needit]; saveWeek(); render(); return; }
+  if (t.id === 'openPC') { openSheet({ mode: 'pc' }); return; }
+  if (t.id === 'putAway') { openSheet({ mode: 'putaway' }); return; }
   if (t.id === 'editBox') { openSheet({ mode: 'box' }); return; }
   if (t.dataset.editlib) { openSheet({ mode: 'edit-lib', id: t.dataset.editlib }); return; }
   const w = week();
@@ -710,20 +1261,26 @@ document.addEventListener('click', ev => {
   if (t.dataset.xdel) { w.extras = w.extras.filter(x => x.id !== t.dataset.xdel); saveWeek(); renderGroc(); return; }
   if (t.id === 'addExtra') { addExtra(); return; }
   if (t.id === 'uncheckAll') { w.checked = {}; w.extras.forEach(x => x.done = false); saveWeek(); renderGroc(); return; }
-  if (t.id === 'copyList') {
-    const lines = [...groceryItems()].filter(i => !w.checked[i.key]).map(i => '- ' + i.text).concat(w.extras.filter(x => !x.done).map(x => '- ' + x.text));
-    copyText(lines.join('\n'), 'List copied');
-  }
+  if (t.id === 'copyList') copyText(shoppingLines(false).join('\n'), 'List copied');
 });
+function addKitchen() {
+  const inp = $('#kitInput'), v = inp.value.trim(), loc = $('#kitLoc').value; if (!v) return inp.focus();
+  const ex = kitchenMatch(v);
+  if (ex) { ex.status = 'have'; toast(`${ex.name} marked as Have`); }
+  else { S.kitchen.items.push({ id: uidGen(), name: v, loc, status: 'have', qty: '', pc: '' }); toast(`Added to the ${loc}`); }
+  kitQuery = ''; kitLocDefault = loc; saveKit(); renderKitchen(); renderHeader(); $('#kitInput').focus();
+}
 function addExtra() {
   const inp = $('#extraInput'), v = inp.value.trim(); if (!v) return;
   week().extras.push({ id: uidGen(), text: v, done: false }); saveWeek(); renderGroc(); $('#extraInput').focus();
 }
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' && ev.target.id === 'extraInput') { ev.preventDefault(); addExtra(); }
+  if (ev.key === 'Enter' && ev.target.id === 'kitInput') { ev.preventDefault(); addKitchen(); }
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches?.('[data-drag]')) { ev.preventDefault(); ev.target.click(); }
 });
 document.addEventListener('input', ev => {
+  if (ev.target.id === 'kitInput') { kitQuery = ev.target.value; const pos = ev.target.selectionStart; renderKitchen(); const n = $('#kitInput'); n.focus(); n.setSelectionRange(pos, pos); }
   if (ev.target.id === 'mealSearch') { mealQuery = ev.target.value; const pos = ev.target.selectionStart; renderMeals(); const n = $('#mealSearch'); n.focus(); n.setSelectionRange(pos, pos); }
 });
 
