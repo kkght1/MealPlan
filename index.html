@@ -202,6 +202,13 @@ details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0
 .copybox{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:.82rem/1.45 ui-monospace,"SF Mono",Menlo,monospace}
 .tabs button{font-size:.72rem}
 .chip .ck{font-weight:800;flex:none}
+.recipe{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.9rem;line-height:1.5;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;user-select:text;-webkit-user-select:text}
+.recipe a{color:var(--fam);font-weight:600}
+.recipe.empty-r{color:var(--muted);font-size:.85rem}
+.recipe.writing{border-color:var(--both)}
+.rhead{display:flex;align-items:center;gap:8px}
+.rhead .lbl{flex:1}
+.field textarea.rta,#bNote{min-height:200px;font-size:14px;line-height:1.45}
 .ckgrid{display:flex;flex-wrap:wrap;gap:6px}
 .ckitem{border:1.5px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 12px;font-weight:600;font-size:.88rem;color:var(--ink);min-height:36px}
 .ckitem[data-st="have"]{background:var(--fam-soft);border-color:var(--fam);color:var(--fam)}
@@ -681,6 +688,7 @@ function drawSheet() {
   const title = s.mode === 'add-entry' ? `Add ${SLOTS.find(x => x[0] === s.slot)[1].toLowerCase()} · ${DAYS[s.day]}`
     : s.mode === 'edit-entry' ? 'Edit meal' : s.mode === 'add-lib' ? 'New saved meal' : 'Edit saved meal';
   let h = `<div class="grab"></div><h2>${esc(title)}</h2><form class="form" id="sheetForm" autocomplete="off">`;
+  if (s.mode === 'edit-entry') h += recipeBlock(e);
   h += `<div class="field"><label for="fName">Meal</label><input id="fName" value="${esc(e.name)}" placeholder="e.g. Sweet potato mash" required enterkeyhint="done"></div>`;
   if (s.mode === 'add-entry') h += `<div class="sugg" id="sugg"></div>`;
   h += `<div class="field"><span class="lbl">Who it’s for</span><div class="tagseg" id="fTag">`
@@ -692,8 +700,8 @@ function drawSheet() {
   h += `<div class="field"><label for="fIng">Ingredients for the grocery list</label><textarea id="fIng" placeholder="One per line, or separated by commas">${esc((e.ing || []).join('\n'))}</textarea></div>`;
   if (entryMode) h += `<div class="field"><label for="fNote">Note</label><input id="fNote" value="${esc(e.note || '')}" placeholder="e.g. cut into small pieces, recipe link"></div>`;
   const libM = s.mode.endsWith('-lib') ? e : findLib(e.name);
-  if (!entryMode) h += `<div class="field"><label for="fRecipe">Recipe or link</label><textarea id="fRecipe" placeholder="Paste a link, or jot the steps">${esc(e.recipe || '')}</textarea></div>`;
-  else if (libM?.recipe) h += `<div class="field"><span class="lbl">Recipe</span><p class="note" style="text-align:left;white-space:pre-line;user-select:text">${esc(libM.recipe)}</p></div>`;
+  if (!entryMode) h += `<div class="field"><label for="fRecipe">Recipe or link</label><textarea id="fRecipe" class="rta" placeholder="Paste a link, or jot the steps">${esc(e.recipe || '')}</textarea>`
+    + (sampleFn ? `<button type="button" class="ghostbtn" id="writeRecipe">✦ ${e.recipe ? 'Rewrite' : 'Write'} the recipe with Claude</button>` : '') + `</div>`;
   if (s.mode === 'add-entry') h += `<label class="cb" id="saveLibRow"><input type="checkbox" id="fSaveLib" checked> Save to my meals</label>`;
   h += `<label class="cb"><input type="checkbox" id="fFav"${libM?.fav ? ' checked' : ''}> ★ Keep in the rotation</label>`;
   h += `<div class="actions"><button class="primary" type="submit">${s.mode.startsWith('add') ? 'Add' : 'Save'}</button>`
@@ -723,6 +731,36 @@ $('#sheetwrap').addEventListener('click', ev => {
   }
   if (t.id === 'fCancel') closeSheet();
   if (t.id === 'fCooked') { openSheet({ mode: 'cooked', id: sheet.id }); return; }
+  if (t.id === 'getRecipe') {
+    const e = week().entries.find(x => x.id === sheet.id); if (!e) return;
+    getRecipeFor(t, async alive => {
+      const box = $('#recipeBox'); box.classList.remove('empty-r'); box.classList.add('writing'); box.textContent = 'Thinking…';
+      const text = await streamRecipe(e, false, txt => { if (alive()) box.textContent = txt; });
+      let lib = findLib(e.name);
+      if (!lib) { lib = { id: uidGen(), name: e.name, tag: e.tag, ing: [...(e.ing || [])] }; S.library.meals.push(lib); }
+      lib.recipe = text; saveLib();
+      if (alive()) { box.classList.remove('writing'); box.innerHTML = linkify(text); t.remove(); toast('Recipe saved to this meal'); }
+    });
+    return;
+  }
+  if (t.id === 'writeRecipe') {
+    const ta = $('#fRecipe');
+    getRecipeFor(t, async alive => {
+      const m = { name: $('#fName').value.trim(), ing: parseIng($('#fIng').value) }; if (!m.name) { toast('Add the meal name first'); return; }
+      const text = await streamRecipe(m, false, txt => { if (alive()) ta.value = txt; });
+      if (alive()) { ta.value = text; toast('Recipe written. Tap Save to keep it.'); }
+    });
+    return;
+  }
+  if (t.id === 'writeBRecipe') {
+    const ta = $('#bNote');
+    getRecipeFor(t, async alive => {
+      const m = { name: $('#bName').value.trim(), ing: parseIng($('#bIng').value), yield: $('#bYield').value.trim() }; if (!m.name) { toast('Add the recipe name first'); return; }
+      const text = await streamRecipe(m, true, txt => { if (alive()) ta.value = txt; });
+      if (alive()) { ta.value = text; toast('Recipe written. Tap Save to keep it.'); }
+    });
+    return;
+  }
   if (extraSheetClick(t)) return;
   if (t.id === 'copyPrompt') copyText(CLAUDE_FORMAT, 'Instructions copied. Paste them into your Claude chat.');
   if (t.id === 'fDelete') {
@@ -932,6 +970,51 @@ function applyUsage() {
   if (n) saveKit();
   return n;
 }
+/* ---------- recipes ---------- */
+const linkify = t => esc(t).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+const leftoverOf = name => (String(name).match(/^leftovers?\s+(?:of\s+)?(.+)$/i) || [])[1];
+function recipeBlock(e) {
+  const src = leftoverOf(e.name), lib = findLib(src || e.name), text = lib?.recipe || '';
+  let h = `<div class="field"><div class="rhead"><span class="lbl">Recipe${src && lib ? ` · ${esc(lib.name)}` : ''}</span>`;
+  if (sampleFn && !src && text) h += `<button type="button" class="mini" id="getRecipe">✦ Rewrite</button>`;
+  h += `</div><div class="recipe${text ? '' : ' empty-r'}" id="recipeBox">${text ? linkify(text) : src ? 'Leftovers: reheat and serve. Warm the toddler’s portion through, then let it cool.' : sampleFn ? 'No recipe saved for this meal yet.' : 'No recipe saved yet. Add one in Meals.'}</div>`;
+  if (sampleFn && !src && !text) h += `<button type="button" class="primary" id="getRecipe">✦ Get the recipe</button>`;
+  return h + `</div>`;
+}
+function recipePrompt(m, baby) {
+  return `Write a home-cooking recipe for "${m.name}" for a Canadian family of two adults and a 14-month-old toddler.
+${baby ? 'This is a toddler freezer batch-prep recipe: make a batch for the freezer, with no added salt, sized for the yield given.' : 'Make enough for one dinner for everyone plus one lunch of leftovers.'}
+The toddler eats the same food but needs low salt: cook with little or no added salt and season the adults' portions after setting the toddler's aside. Keep toddler safety in mind (soft textures, small pieces, no whole nuts).
+${(m.ing || []).length ? `Use these ingredients (add pantry basics if needed): ${m.ing.join(', ')}.` : ''}${m.note ? `\nNote from the plan: ${m.note}` : ''}${m.yield ? `\nYield: ${m.yield}` : ''}
+
+Use metric weights with cups and spoons where natural. Plain text only, no markdown symbols like # or **. Use exactly this layout:
+
+Serves: ... · Time: ...
+
+Ingredients
+- amount ingredient
+
+Steps
+1. ...
+
+For the toddler
+- one to three short tips (portion, texture, cooling)
+${baby ? '\nFreezing and reheating\n- how to freeze, how long it keeps, how to reheat' : '\nLeftovers\n- one short line on storing and reheating'}`;
+}
+async function streamRecipe(m, baby, onText) {
+  const { text } = await sampleFn(recipePrompt(m, baby), { modelTier: 'default', onText: ({ text }) => onText(text) });
+  return text.replace(/\*\*|^#+\s*/gm, '').trim();
+}
+const RECIPE_ERR = { not_granted: 'Claude isn’t allowed on this page, so it can’t write recipes.', rate_limited: 'Claude is busy. Try again in a minute.' };
+async function getRecipeFor(btn, run) {
+  if (btn.disabled) return; const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Writing…';
+  const s0 = sheet;
+  try { await run(() => sheet === s0); }
+  catch (e) { if (sheet === s0) toast(RECIPE_ERR[e?.code] || 'Couldn’t get a recipe right now. Try again.'); }
+  if (sheet === s0 && document.body.contains(btn)) { btn.disabled = false; btn.textContent = label; }
+}
+
 /* ---------- pantry checklist ---------- */
 const STAPLES = {
   pantry: {
@@ -1018,7 +1101,8 @@ const EXTRA_SHEETS = {
     sh(form(sheet.id ? 'Baby prep recipe' : 'New baby prep recipe', fieldIn('bName', 'Recipe', r.name, 'e.g. Sweet potato & lentil fritters')
       + fieldTa('bIng', 'Ingredients for the grocery list', (r.ing || []).join('\n'), 'One per line')
       + fieldIn('bYield', 'Makes', r.yield, 'e.g. 12 muffins, 8 portions')
-      + fieldTa('bNote', 'Method and notes', r.note, 'Steps, freezing and reheating tips'), sheet.id ? 'Save' : 'Add', !!sheet.id));
+      + fieldTa('bNote', 'Method and notes', r.note, 'Steps, freezing and reheating tips')
+      + (sampleFn ? `<button type="button" class="ghostbtn" id="writeBRecipe">✦ Write the full recipe with Claude</button>` : ''), sheet.id ? 'Save' : 'Add', !!sheet.id));
   },
   made() {
     const r = S.baby.recipes.find(x => x.id === sheet.id); if (!r) return closeSheet();
@@ -1325,7 +1409,7 @@ function applyPlan() {
   });
   if (preps) saveBaby();
   saveWeek(); closeSheet(); S.view.tab = 'plan'; window.scrollTo(0, 0); render();
-  toast(`Added ${r.meals.length} meals${preps ? ` and ${preps} baby prep` : ''}. Your grocery list is updated.`);
+  toast(`Added ${r.meals.length} meals${preps ? ` and ${preps} baby prep` : ''}. Tap any meal for its recipe.`);
 }
 
 /* ---------- clicks ---------- */
