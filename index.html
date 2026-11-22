@@ -202,6 +202,12 @@ details.onhand .list{border:0;border-top:1px solid var(--line);border-radius:0 0
 .copybox{width:100%;min-height:120px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;font:.82rem/1.45 ui-monospace,"SF Mono",Menlo,monospace}
 .tabs button{font-size:.72rem}
 .chip .ck{font-weight:800;flex:none}
+.pm.pick{cursor:pointer;align-items:flex-start;padding:5px 0}
+.pm.pick input{width:20px;height:20px;accent-color:var(--fam);flex:none;margin:1px 0 0}
+.pm.off .n{color:var(--muted);text-decoration:line-through}
+.pm.off .n small{text-decoration:none}
+.fbin{display:block;width:calc(100% - 28px);margin:2px 0 8px 28px;border:1.5px solid var(--baby);background:var(--bg);border-radius:10px;padding:8px 10px;font-size:16px}
+button:disabled{opacity:.45;cursor:default}
 .recipe{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.9rem;line-height:1.5;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;user-select:text;-webkit-user-select:text}
 .recipe a{color:var(--fam);font-weight:600}
 .recipe.empty-r{color:var(--muted);font-size:.85rem}
@@ -807,6 +813,17 @@ $('#sheetwrap').addEventListener('submit', ev => {
   closeSheet(); render();
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && sheet) closeSheet(); });
+$('#sheetwrap').addEventListener('change', ev => {
+  const t = ev.target; if (sheet?.mode !== 'planner' || !sheet.result) return;
+  if (t.dataset.keep != null) toggleKeep(+t.dataset.keep, t.checked);
+  if (t.dataset.bpkeep != null) { sheet.result.babyPrep[+t.dataset.bpkeep].keep = t.checked; redrawPlanner(); }
+  if (t.id === 'plSaveNew') sheet.saveNew = t.checked;
+});
+$('#sheetwrap').addEventListener('input', ev => {
+  const t = ev.target; if (sheet?.mode !== 'planner' || !sheet.result) return;
+  if (t.dataset.fb != null) sheet.result.meals[+t.dataset.fb].fb = t.value;
+  if (t.id === 'plFb') sheet.feedback = t.value;
+});
 
 /* ---------- copy ---------- */
 function copyText(text, ok) {
@@ -1320,6 +1337,7 @@ function extraSheetClick(t) {
   if (t.id === 'plStop') { sheet.ctl?.abort(); return true; }
   if (t.id === 'plAgain') { sheet.step = 'form'; drawPlanner(); return true; }
   if (t.id === 'plUse') { applyPlan(); return true; }
+  if (t.id === 'plRework') { reworkPlan(); return true; }
   return false;
 }
 
@@ -1349,22 +1367,46 @@ function drawPlanner() {
     sh(`<div class="grab"></div><h2>Couldn’t make a plan</h2><div class="preview bad">${esc(s.err)}</div><div class="actions" style="margin-top:14px"><button type="button" class="primary" id="plAgain">Back</button><button type="button" class="ghostbtn" id="fCancel">Close</button></div>`);
     return;
   }
-  const r = s.result;
+  const r = s.result, keptN = r.meals.filter(m => m.keep !== false).length;
+  const redoN = r.meals.length - keptN + r.babyPrep.filter(b => b.keep === false).length;
   let h = `<div class="grab"></div><h2>Your plan</h2><div class="form">`;
   if (r.summary) h += `<div class="summary">${esc(r.summary)}</div>`;
-  h += '<div>';
+  h += `<p class="note" style="text-align:left">Untick anything you’d like changed and say why if you like, then tap Rework. Claude keeps the ticked meals and redoes the rest. Repeat until you’re happy.</p><div>`;
   DAYS.forEach((dn, di) => {
     const ms = r.meals.filter(m => m.day === di).sort((a, b) => 'bld'.indexOf(a.slot) - 'bld'.indexOf(b.slot));
     if (!ms.length) return;
-    h += `<p class="pday">${dn}</p>` + ms.map(m => `<div class="pm"><span class="s">${slotName(m.slot)}</span><span class="n">${esc(m.name)}<span class="badge t-${m.tag}">${TAGNAME[m.tag]}</span>${m.isNew ? '<span class="badge t-both">New</span>' : ''}${m.note ? `<small>${esc(m.note)}</small>` : ''}</span></div>`).join('');
+    h += `<p class="pday">${dn}</p>` + ms.map(m => {
+      const i = r.meals.indexOf(m), on = m.keep !== false;
+      return `<label class="pm pick${on ? '' : ' off'}"><input type="checkbox" data-keep="${i}"${on ? ' checked' : ''} aria-label="Keep ${esc(m.name)}"><span class="s">${slotName(m.slot)}</span>`
+        + `<span class="n">${esc(m.name)}<span class="badge t-${m.tag}">${TAGNAME[m.tag]}</span>${m.isNew ? '<span class="badge t-both">New</span>' : ''}${m.updated ? '<span class="badge t-baby">Updated</span>' : ''}${m.note ? `<small>${esc(m.note)}</small>` : ''}</span></label>`
+        + (on ? '' : `<input class="fbin" data-fb="${i}" value="${esc(m.fb || '')}" placeholder="What should change? e.g. no fish, quicker" aria-label="Feedback on ${esc(m.name)}">`);
+    }).join('');
   });
   h += '</div>';
-  if (r.babyPrep.length) h += `<div class="field"><span class="lbl">Baby freezer prep</span>` + r.babyPrep.map((b, i) => `<label class="cb"><input type="checkbox" data-bp="${i}" checked> <span>${esc(b.name)}${b.yield ? ` · ${esc(b.yield)}` : ''}${b.note ? `<span class="sub" style="display:block;font-size:.78rem;color:var(--muted)">${esc(b.note)}</span>` : ''}</span></label>`).join('') + '</div>';
-  h += `<label class="cb"><input type="checkbox" id="plSaveNew" checked> Add new meals to Saved meals</label>`;
-  h += `<div class="actions"><button type="button" class="primary" id="plUse">Use this plan</button><button type="button" class="ghostbtn" id="plAgain">Change and retry</button></div></div>`;
+  if (r.babyPrep.length) h += `<div class="field"><span class="lbl">Baby freezer prep</span>` + r.babyPrep.map((b, i) => `<label class="cb"><input type="checkbox" data-bpkeep="${i}"${b.keep !== false ? ' checked' : ''}> <span>${esc(b.name)}${b.yield ? ` · ${esc(b.yield)}` : ''}${b.updated ? '<span class="badge t-baby">Updated</span>' : ''}${b.note ? `<span class="sub" style="display:block;font-size:.78rem;color:var(--muted)">${esc(b.note)}</span>` : ''}</span></label>`).join('') + '</div>';
+  h += fieldTa('plFb', 'Anything else for Claude? (optional)', s.feedback || '', 'e.g. more slow cooker, nothing spicy, use up the ground beef')
+    + (s.fbLog?.length ? `<p class="note" style="text-align:left;margin-top:-8px">Claude remembers: ${esc(s.fbLog.join(' · '))}</p>` : '');
+  h += `<label class="cb"><input type="checkbox" id="plSaveNew"${s.saveNew === false ? '' : ' checked'}> Add new meals to Saved meals</label>`;
+  h += `<div class="actions"><button type="button" class="primary" id="plUse"${keptN ? '' : ' disabled'}>Use ${keptN} ticked meal${keptN === 1 ? '' : 's'}</button><button type="button" class="ghostbtn" id="plRework"${redoN ? '' : ' disabled'}>✦ Rework ${redoN || ''}</button></div>`;
+  h += `<button type="button" class="ghostbtn" id="plAgain">Start over</button></div>`;
   sh(h);
 }
-function plannerPrompt(o) {
+function redrawPlanner() { const el = $('#sheet'), st = el.scrollTop; drawPlanner(); el.scrollTop = st; }
+function toggleKeep(i, on) {
+  const r = sheet.result, m = r.meals[i]; m.keep = on;
+  // a dinner and the next day's leftover lunch go together
+  if (m.slot === 'd') r.meals.forEach(x => { if (x.day === m.day + 1 && x.slot === 'l' && norm(leftoverOf(x.name)) === norm(m.name)) x.keep = on; });
+  redrawPlanner();
+}
+function reworkPlan() {
+  const s = sheet, r = s.result;
+  const redo = r.meals.filter(m => m.keep === false), babyRedo = r.babyPrep.filter(b => b.keep === false);
+  if (!redo.length && !babyRedo.length) { toast('Untick the meals you’d like changed, then tap Rework'); return; }
+  s.saveNew = $('#plSaveNew')?.checked !== false;
+  const fb = (s.feedback || '').trim(), log = [...(s.fbLog || []), ...(fb ? [fb] : [])];
+  requestPlan({ keep: r.meals.filter(m => m.keep !== false), redo, feedback: log.join(' / '), rejected: s.rejected || [], babyRedo: babyRedo.map(b => b.name), fbAdd: fb });
+}
+function plannerPrompt(o, rw) {
   const wk = S.view.week, w = week(), prev = S.weeks[ymd(addDays(parseKey(wk), -7))];
   const kit = loc => S.kitchen.items.filter(i => i.loc === loc && i.status !== 'out').map(i => i.name + (i.qty ? ` (${i.qty})` : '') + (i.status === 'low' ? ' [low]' : '')).join('; ') || 'nothing listed';
   const favs = S.library.meals.filter(m => m.fav).map(m => `- ${m.name} [${m.tag}]${m.last ? ` (last planned week of ${m.last})` : ' (not planned recently)'}: ${m.ing.join(', ')}`);
@@ -1376,7 +1418,7 @@ function plannerPrompt(o) {
   return `You are planning a week of home cooking for a family of two adults and a 14-month-old toddler. The toddler is a great eater and eats what the adults eat, including leftovers, but needs low salt: cook shared dishes with little or no added salt and season the adult portions after setting the toddler's portion aside. Keep toddler safety in mind (soft textures, small pieces, quartered grapes and cherry tomatoes, no whole nuts).
 
 Week: ${weekRange(wk)} (Sunday to Saturday). We live in Canada and shop at Loblaw / PC Express.
-Plan: ${slots} for all 7 days.${kept.length ? `\nAlready planned. Keep these and only fill the empty slots:\n${kept.join('\n')}` : ''}
+Plan: ${rw ? 'only the replacement meals listed under REVISION at the end.' : `${slots} for all 7 days.${kept.length ? `\nAlready planned. Keep these and only fill the empty slots:\n${kept.join('\n')}` : ''}`}
 
 WHAT WE HAVE (use these first, especially freezer items and anything marked [low] or perishable):
 Pantry: ${kit('pantry')}
@@ -1404,7 +1446,19 @@ ${o.baby ? `- Suggest 1 or 2 toddler freezer batch-prep recipes for this week (i
 
 Reply with only JSON in exactly this shape:
 {"summary": "one or two sentences on the week's approach", "meals": [{"day": 0, "slot": "d", "name": "Meal name", "tag": "both", "ing": ["ingredient"], "note": "short tip", "isNew": false}], "babyPrep": [{"name": "Recipe name", "ing": ["ingredient"], "yield": "12 muffins", "note": "short method and freezing tip"}]}
-day is 0 for Sunday, 1 for Monday, through 6 for Saturday. slot is "b" for breakfast, "l" for lunch, "d" for dinner.`;
+day is 0 for Sunday, 1 for Monday, through 6 for Saturday. slot is "b" for breakfast, "l" for lunch, "d" for dinner.${rw ? revisionText(rw, kept) : ''}`;
+}
+function revisionText(rw, kept) {
+  const line = m => `- ${DAYS[m.day]} ${slotName(m.slot).toLowerCase()}: ${m.name} [${m.tag}]`;
+  return `
+
+REVISION
+We are revising a plan you suggested. These meals are settled; keep them exactly and do not return them:
+${[...kept, ...rw.keep.map(line)].join('\n') || '(none)'}
+Replace ONLY these meals, returning one new meal for each slot (plus a separate "baby" meal in the same slot when needed). A lunch named "Leftover ..." should follow whatever dinner now comes the night before:
+${rw.redo.map(m => `- ${DAYS[m.day]} ${slotName(m.slot).toLowerCase()} (was "${m.name}"${m.fb ? `; our feedback: "${m.fb}"` : ''})`).join('\n') || '(none)'}${rw.feedback ? `\nOur feedback on the plan overall: "${rw.feedback}"` : ''}${rw.rejected.length ? `\nWe already passed on these, so don't suggest them again: ${rw.rejected.join('; ')}` : ''}
+${rw.babyRedo.length ? `Also suggest replacements for these baby prep ideas we passed on, in babyPrep: ${rw.babyRedo.join('; ')}` : 'Return babyPrep as an empty array this time.'}
+In "summary", say in one sentence what you changed.`;
 }
 const PLAN_ERR = {
   not_granted: 'Claude wasn’t allowed for this page. You can still plan by hand, or use Import to paste a plan from a Claude chat.',
@@ -1422,19 +1476,39 @@ async function runPlanner() {
   const w = week(); if (w.ideas !== o.ideas) { w.ideas = o.ideas; saveWeek(); }
   await loadDoc(weekDocKey(ymd(addDays(parseKey(S.view.week), -7)))).catch(() => {});
   if (sheet !== s) return;
-  s.step = 'busy'; s.status = 'Thinking…'; s.ctl = new AbortController(); drawPlanner();
+  requestPlan(null);
+}
+async function requestPlan(rw) {
+  const s = sheet, o = s.opt;
+  s.step = 'busy'; s.status = rw ? 'Reworking those meals…' : 'Thinking…'; s.ctl = new AbortController(); drawPlanner();
   try {
-    const raw = await sampleFn.json(plannerPrompt(o), {
+    const raw = await sampleFn.json(plannerPrompt(o, rw), {
       signal: s.ctl.signal, modelTier: 'default',
       onText: () => { if (s.status !== 'Writing your plan…') { s.status = 'Writing your plan…'; const n = $('#plStatus'); if (n && sheet === s) n.textContent = s.status; } },
     });
     if (sheet !== s) return;
     const r = cleanPlan(raw, o);
-    if (!r.meals.length) throw { code: 'empty_completion' };
-    s.result = r; s.step = 'preview';
+    if (rw) {
+      const old = s.result, redo = new Set(rw.redo.map(m => m.day + m.slot));
+      const fresh = r.meals.filter(m => redo.has(m.day + m.slot)).map(m => ({ ...m, keep: true, updated: true }));
+      const newBaby = rw.babyRedo.length ? r.babyPrep.map(b => ({ ...b, keep: true, updated: true })) : [];
+      if (!fresh.length && !newBaby.length) throw { code: 'empty_completion' };
+      const covered = new Set(fresh.map(m => m.day + m.slot));
+      s.rejected = [...(s.rejected || []), ...rw.redo.filter(m => covered.has(m.day + m.slot)).map(m => m.name), ...(newBaby.length ? rw.babyRedo : [])];
+      old.meals = [...old.meals.filter(m => m.keep !== false || !covered.has(m.day + m.slot)).map(m => ({ ...m, updated: false })), ...fresh];
+      old.babyPrep = newBaby.length ? [...old.babyPrep.filter(b => b.keep !== false).map(b => ({ ...b, updated: false })), ...newBaby] : old.babyPrep.map(b => ({ ...b, updated: false }));
+      if (r.summary) old.summary = r.summary;
+      if (rw.fbAdd) s.fbLog = [...(s.fbLog || []), rw.fbAdd];
+      s.feedback = '';
+    } else {
+      if (!r.meals.length) throw { code: 'empty_completion' };
+      s.result = r; s.rejected = []; s.feedback = ''; s.fbLog = [];
+    }
+    s.step = 'preview';
   } catch (e) {
     if (sheet !== s) return;
-    if (e && e.code === 'cancelled') { s.step = 'form'; }
+    if (rw) { s.step = 'preview'; if (!(e && e.code === 'cancelled')) toast(PLAN_ERR[e && e.code] || 'Couldn’t reach Claude right now. Try again.'); }
+    else if (e && e.code === 'cancelled') { s.step = 'form'; }
     else { s.step = 'error'; s.err = PLAN_ERR[e && e.code] || 'Couldn’t reach Claude right now. Try again in a little while.'; }
   }
   s.ctl = null; drawPlanner();
@@ -1452,7 +1526,9 @@ function cleanPlan(raw, o) {
   return { summary: String(raw?.summary || '').trim().slice(0, 500), meals, babyPrep };
 }
 function applyPlan() {
-  const s = sheet, r = s.result, o = s.opt, w = week();
+  const s = sheet, o = s.opt, w = week();
+  const r = { meals: s.result.meals.filter(m => m.keep !== false), babyPrep: s.result.babyPrep.filter(b => b.keep !== false) };
+  if (!r.meals.length) return;
   if (!o.keep) w.entries = w.entries.filter(e => !o.slots.includes(e.slot));
   r.meals.forEach(m => w.entries.push({ id: uidGen(), day: m.day, slot: m.slot, name: m.name, tag: m.tag, ing: m.ing, note: m.note }));
   if ($('#plSaveNew').checked) {
@@ -1461,10 +1537,9 @@ function applyPlan() {
     if (added) saveLib();
   }
   let preps = 0;
-  r.babyPrep.forEach((b, i) => {
-    if (!document.querySelector(`[data-bp="${i}"]`)?.checked) return;
+  r.babyPrep.forEach(b => {
     let rec = S.baby.recipes.find(x => norm(x.name) === norm(b.name));
-    if (!rec) { rec = { id: uidGen(), ...b }; S.baby.recipes.push(rec); }
+    if (!rec) { rec = { id: uidGen(), name: b.name, ing: b.ing, yield: b.yield, note: b.note }; S.baby.recipes.push(rec); }
     if (!w.prep.includes(rec.id)) { w.prep.push(rec.id); preps++; }
   });
   if (preps) saveBaby();
