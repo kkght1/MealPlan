@@ -592,7 +592,7 @@ function shoppingLines(withPrefs) {
 /* ---------- kitchen ---------- */
 function renderKitchen() {
   const f = S.view.kfilter, q = norm(kitQuery);
-  let html = `<div class="row"><input class="search" id="kitInput" placeholder="Add an item, like rice or frozen peas" aria-label="Item name" value="${esc(kitQuery)}" enterkeyhint="done">`
+  let html = `<div class="row"><input class="search" id="kitInput" placeholder="Add an item, like blade roast 2.24 lb" aria-label="Item name" value="${esc(kitQuery)}" enterkeyhint="done">`
     + `<select class="sel" id="kitLoc" aria-label="Where it goes">${LOCS.map(([k, l]) => `<option value="${k}"${k === (LOCS.some(x => x[0] === f) ? f : kitLocDefault) ? ' selected' : ''}>${l}</option>`).join('')}</select>`
     + `<button class="primary" id="kitAdd">Add</button></div>`
     + `<div class="seg" role="group" aria-label="Show">${[['all','All'],...LOCS,['low','Low']].map(([k, l]) => `<button data-kf="${k}" aria-pressed="${f === k}">${l}</button>`).join('')}</div>`;
@@ -966,7 +966,7 @@ function usageFields(ing) {
 }
 function applyUsage() {
   let n = 0;
-  document.querySelectorAll('[data-use]').forEach(sel => { const k = S.kitchen.items.find(x => x.id === sel.dataset.use); if (k && k.status !== sel.value) { k.status = sel.value; n++; } });
+  document.querySelectorAll('[data-use]').forEach(sel => { const k = S.kitchen.items.find(x => x.id === sel.dataset.use); if (k && k.status !== sel.value) { k.status = sel.value; if (sel.value === 'out') k.qty = ''; n++; } });
   if (n) saveKit();
   return n;
 }
@@ -981,13 +981,7 @@ function recipeBlock(e) {
   if (sampleFn && !src && !text) h += `<button type="button" class="primary" id="getRecipe">✦ Get the recipe</button>`;
   return h + `</div>`;
 }
-function recipePrompt(m, baby) {
-  return `Write a home-cooking recipe for "${m.name}" for a Canadian family of two adults and a 14-month-old toddler.
-${baby ? 'This is a toddler freezer batch-prep recipe: make a batch for the freezer, with no added salt, sized for the yield given.' : 'Make enough for one dinner for everyone plus one lunch of leftovers.'}
-The toddler eats the same food but needs low salt: cook with little or no added salt and season the adults' portions after setting the toddler's aside. Keep toddler safety in mind (soft textures, small pieces, no whole nuts).
-${(m.ing || []).length ? `Use these ingredients (add pantry basics if needed): ${m.ing.join(', ')}.` : ''}${m.note ? `\nNote from the plan: ${m.note}` : ''}${m.yield ? `\nYield: ${m.yield}` : ''}
-
-Use metric weights with cups and spoons where natural. Plain text only, no markdown symbols like # or **. Use exactly this layout:
+const RECIPE_LAYOUT = baby => `Plain text only, no markdown symbols like # or **. Use exactly this layout:
 
 Serves: ... · Time: ...
 
@@ -1000,6 +994,22 @@ Steps
 For the toddler
 - one to three short tips (portion, texture, cooling)
 ${baby ? '\nFreezing and reheating\n- how to freeze, how long it keeps, how to reheat' : '\nLeftovers\n- one short line on storing and reheating'}`;
+const UNITS_RULE = 'Give amounts in the units we use: pounds for meat and fish (matching any amount we list), cups and spoons for everything else, with grams in brackets where helpful.';
+const HOUSE = 'The toddler eats the same food but needs low salt: cook with little or no added salt and season the adults\' portions after setting the toddler\'s aside. Keep toddler safety in mind (soft textures, small pieces, no whole nuts).';
+// what we have of a recipe's ingredients, with amounts, so the recipe can be sized to it
+function kitchenAmounts(ing) {
+  const seen = new Set();
+  return (ing || []).map(i => kitchenMatch(i)).filter(k => k && k.status !== 'out' && !seen.has(k.id) && seen.add(k.id))
+    .filter(k => k.qty).map(k => `- ${k.name}: ${k.qty} (${k.loc})`);
+}
+function recipePrompt(m, baby) {
+  const have = kitchenAmounts(m.ing);
+  return `Write a home-cooking recipe for "${m.name}" for a Canadian family of two adults and a 14-month-old toddler.
+${baby ? 'This is a toddler freezer batch-prep recipe: make a batch for the freezer, with no added salt, sized for the yield given.' : 'Make enough for one dinner for everyone plus one lunch of leftovers.'}
+${HOUSE}
+${(m.ing || []).length ? `Use these ingredients (add pantry basics if needed): ${m.ing.join(', ')}.` : ''}${m.note ? `\nNote from the plan: ${m.note}` : ''}${m.yield ? `\nYield: ${m.yield}` : ''}
+${have.length ? `\nWhat we have of these (use the full amount of any meat or fish listed, scale the rest of the recipe to it, and include thawing time for anything from the freezer):\n${have.join('\n')}\n` : ''}
+${UNITS_RULE} ${RECIPE_LAYOUT(baby)}`;
 }
 async function streamRecipe(m, baby, onText) {
   const { text } = await sampleFn(recipePrompt(m, baby), { modelTier: 'default', onText: ({ text }) => onText(text) });
@@ -1054,6 +1064,21 @@ function starterSections() {
   return secs;
 }
 const EXTRA_SHEETS = {
+  krecipe() {
+    const k = S.kitchen.items.find(x => x.id === sheet.id); if (!k) return closeSheet();
+    const w = week(), r = sheet.result;
+    let h = `<div class="grab"></div><h2>Recipe for ${esc(k.name)}</h2><form class="form" id="sheetForm" autocomplete="off">`
+      + `<p class="note" style="text-align:left">${esc([k.qty || 'Amount not set', LOCS.find(l => l[0] === k.loc)[1]].join(' · '))}${k.qty ? '. Claude sizes the recipe to use all of it.' : '. Add an amount on the item so Claude can size the recipe.'}</p>`
+      + fieldIn('krPref', 'Anything in mind? (optional)', sheet.pref || '', 'e.g. slow cooker, Sunday dinner, something with potatoes');
+    if (sheet.busy) h += `<div class="busy"><div class="spin"></div><span>Writing a recipe…</span></div>`;
+    else if (r) {
+      const firstFree = [0, 1, 2, 3, 4, 5, 6].find(d => !w.entries.some(e => e.day === d && e.slot === 'd')) ?? 0;
+      h += `<div class="field"><span class="lbl">${esc(r.name)}</span><div class="recipe">${linkify(r.recipe)}</div></div>`
+        + `<div class="two">${fieldSel('krDay', 'Add to', DAYS.map((d, i) => [String(i), `${d} dinner`]), String(firstFree))}<div class="field"><span class="lbl">&nbsp;</span><button type="button" class="primary" id="krAdd">Add to plan</button></div></div>`
+        + `<div class="actions"><button type="button" class="ghostbtn" id="krSave">Save to Meals only</button><button type="submit" class="ghostbtn">Try another</button></div>`;
+    } else h += `<div class="actions"><button type="submit" class="primary">✦ Make a recipe</button><button type="button" class="ghostbtn" id="fCancel">Cancel</button></div>`;
+    sh(h + '</form>');
+  },
   kstarter() {
     const secs = starterSections(); sheet.st = {};
     let h = `<div class="grab"></div><h2>Pantry checklist</h2><form class="form" id="sheetForm" autocomplete="off">
@@ -1082,13 +1107,14 @@ const EXTRA_SHEETS = {
     const i = S.kitchen.items.find(x => x.id === sheet.id) || { name: sheet.name || '', loc: sheet.loc || 'pantry', qty: '', status: 'have', pc: '' };
     sh(form(sheet.id ? 'Edit kitchen item' : 'Add to kitchen', fieldIn('kName', 'Item', i.name, 'e.g. Basmati rice')
       + `<div class="two">${fieldSel('kLoc', 'Where', LOCS, i.loc)}${fieldSel('kStat', 'Status', STATS, i.status)}</div>`
-      + fieldIn('kQty', 'How much (optional)', i.qty, 'e.g. 2 bags, half a jar')
+      + fieldIn('kQty', 'How much (optional)', i.qty, 'e.g. 2.24 lb, 2 bags, half a jar')
       + fieldIn('kPc', 'PC Express product (optional)', i.pc, 'e.g. PC Organics Basmati Rice 2kg')
-      + `<p class="note" style="text-align:left">The product name helps Claude pick the right item when filling your PC Express cart.</p>`, sheet.id ? 'Save' : 'Add', !!sheet.id));
+      + `<p class="note" style="text-align:left">The product name helps Claude pick the right item when filling your PC Express cart.</p>`
+      + (sheet.id && sampleFn ? `<button type="button" class="ghostbtn" id="kRecipe">✦ Make a recipe with this</button>` : ''), sheet.id ? 'Save' : 'Add', !!sheet.id));
   },
   kbulk() {
     sh(form('Add several items', fieldSel('kbLoc', 'Where they go', LOCS, LOCS.some(l => l[0] === S.view.kfilter) ? S.view.kfilter : 'pantry')
-      + fieldTa('kbList', 'Items', '', 'One per line, or separated by commas\nRice\nCanned chickpeas\nFrozen peas'), 'Add all'));
+      + fieldTa('kbList', 'Items', '', 'One per line. Add amounts if you like:\nBlade roast 2.24 lb\nGround beef 2 lb\nFrozen peas'), 'Add all'));
   },
   stash() {
     const st = S.baby.stash.find(x => x.id === sheet.id) || { name: '', portions: 6, made: ymd(new Date()) };
@@ -1160,7 +1186,37 @@ function updateCkCount() {
   const n = Object.values(sheet.st || {}).filter(x => x.st).length, b = $('#ckSave');
   if (b) b.textContent = n ? `Save ${n} item${n > 1 ? 's' : ''} to kitchen` : 'Save to kitchen';
 }
+async function runKRecipe() {
+  const s = sheet, k = S.kitchen.items.find(x => x.id === s.id); if (!k || s.busy) return;
+  s.pref = $('#krPref').value.trim(); s.busy = true; const prev = s.result; s.result = null; drawSheet();
+  const others = S.kitchen.items.filter(i => i.id !== k.id && i.status !== 'out').map(i => i.name + (i.qty ? ` (${i.qty})` : '')).join('; ');
+  const prompt = `Create one home-cooking dinner recipe built around ${k.name}${k.qty ? `. We have ${k.qty}; use all of it and scale the rest of the recipe to that amount` : ''}. It's in our ${k.loc}${k.loc === 'freezer' ? ', so include when and how to thaw it' : ''}.
+It's for a Canadian family of two adults and a 14-month-old toddler; leftovers for lunch are welcome. ${HOUSE}
+Other things we have (prefer these, but you can add a few fresh items): ${others || 'not listed'}.${s.pref ? `\nWhat we'd like: ${s.pref}` : ''}${prev ? `\nSuggest something different from "${prev.name}".` : ''}
+${UNITS_RULE}
+
+Reply with only JSON: {"name": "Dish name", "ing": ["simple grocery names with no amounts, including ${k.name}"], "note": "one short toddler tip", "recipe": "the full recipe as plain text"}
+For "recipe": ${RECIPE_LAYOUT(false)}`;
+  try {
+    const r = await sampleFn.json(prompt, { modelTier: 'default' });
+    if (sheet !== s) return;
+    const strs = a => Array.isArray(a) ? a.map(x => String(x || '').trim()).filter(Boolean).slice(0, 30) : [];
+    if (!r || !r.name || !r.recipe) throw { code: 'empty_completion' };
+    s.result = { name: String(r.name).trim().slice(0, 120), ing: strs(r.ing), note: String(r.note || '').trim().slice(0, 240), recipe: String(r.recipe).replace(/\*\*|^#+\s*/gm, '').trim() };
+  } catch (e) { if (sheet === s) { s.result = prev; toast(PLAN_ERR[e?.code] || 'Couldn’t get a recipe right now. Try again.'); } }
+  if (sheet === s) { s.busy = false; drawSheet(); }
+}
+function saveKRecipe(addDay) {
+  const r = sheet.result; if (!r) return;
+  let lib = findLib(r.name);
+  if (!lib) { lib = { id: uidGen(), name: r.name, tag: 'both', ing: [...r.ing] }; S.library.meals.push(lib); }
+  lib.recipe = r.recipe; saveLib();
+  if (addDay != null) { week().entries.push({ id: uidGen(), day: addDay, slot: 'd', name: r.name, tag: 'both', ing: [...r.ing], note: r.note }); saveWeek(); }
+  closeSheet(); render();
+  toast(addDay != null ? `Added to ${DAYS[addDay]} dinner. Recipe saved.` : 'Saved to Meals');
+}
 const EXTRA_SUBMIT = {
+  krecipe() { runKRecipe(); },
   kstarter() {
     let added = 0, changed = 0;
     Object.values(sheet.st).forEach(x => {
@@ -1189,10 +1245,10 @@ const EXTRA_SUBMIT = {
   },
   kbulk() {
     const loc = $('#kbLoc').value; let added = 0, restocked = 0;
-    parseIng($('#kbList').value).forEach(name => {
-      const ex = kitchenMatch(name);
-      if (ex) { if (ex.status !== 'have') { ex.status = 'have'; restocked++; } }
-      else { S.kitchen.items.push({ id: uidGen(), name, loc, status: 'have', qty: '', pc: '' }); added++; }
+    String($('#kbList').value).split(/\n|,(?!\d)/).map(x => x.trim()).filter(Boolean).forEach(line => {
+      const { name, qty } = splitQty(line), ex = kitchenMatch(name);
+      if (ex) { if (qty) ex.qty = qty; if (ex.status !== 'have') { ex.status = 'have'; restocked++; } }
+      else { S.kitchen.items.push({ id: uidGen(), name, loc, status: 'have', qty, pc: '' }); added++; }
     });
     saveKit(); closeSheet(); render();
     toast(`Added ${added} item${added === 1 ? '' : 's'}${restocked ? `, restocked ${restocked}` : ''}`);
@@ -1256,6 +1312,9 @@ function extraSheetClick(t) {
     const x = sheet.st[t.dataset.ck]; x.st = { '': 'have', have: 'low', low: '' }[x.st];
     t.dataset.st = x.st; t.setAttribute('aria-pressed', !!x.st); updateCkCount(); return true;
   }
+  if (t.id === 'kRecipe') { openSheet({ mode: 'krecipe', id: sheet.id }); return true; }
+  if (t.id === 'krAdd') { saveKRecipe(+$('#krDay').value); return true; }
+  if (t.id === 'krSave') { saveKRecipe(null); return true; }
   if (t.id === 'copyPcPrompt') { copyText(sheet.prompt, 'Copied. Paste it into Claude in Chrome.'); return true; }
   if (t.id === 'copyPlain') { copyText(sheet.list, 'List copied'); return true; }
   if (t.id === 'plStop') { sheet.ctl?.abort(); return true; }
@@ -1340,6 +1399,7 @@ GUIDELINES
 - For every "both" dinner, the note says in a few words how to adapt it for the toddler (e.g. "Set aside toddler portion before adding chili flakes").
 - Ingredients: simple grocery names, no amounts, using the same names as WHAT WE HAVE when it's the same thing. List every ingredient the dish needs, including ones we already have. The app subtracts what's on hand.
 - When you reuse a saved meal, use its name exactly.
+- Where an amount of meat or fish is listed in WHAT WE HAVE (e.g. 2.24 lb blade roast), size that dish to use it and say so in the note, including when to move it from the freezer to the fridge to thaw (e.g. "Uses the 2.24 lb roast. Thaw in the fridge from Thursday night").
 ${o.baby ? `- Suggest 1 or 2 toddler freezer batch-prep recipes for this week (ideas: oatmeal cups, egg muffins, low-salt bolognese, veggie meatballs, fritters, muffins), favouring what's missing or low in the baby stash. Our saved baby prep recipes: ${S.baby.recipes.map(r => r.name).join('; ') || 'none'}. Reuse a saved name exactly if suggesting one.` : '- Leave babyPrep as an empty array.'}
 
 Reply with only JSON in exactly this shape:
@@ -1466,11 +1526,19 @@ document.addEventListener('click', ev => {
   if (t.id === 'uncheckAll') { w.checked = {}; w.extras.forEach(x => x.done = false); saveWeek(); renderGroc(); return; }
   if (t.id === 'copyList') copyText(shoppingLines(false).join('\n'), 'List copied');
 });
+// "Blade roast 2.24 lb", "Blade roast - 2.24lb", "2.24 lb blade roast", "Ground beef x2" → name + amount
+const UNIT_RE = '(?:lbs?|pounds?|kg|g|grams?|oz|ml|l|litres?|liters?|packs?|pkgs?|packages?|bags?|cans?|jars?|boxes?|bottles?|dozen)';
+function splitQty(t) {
+  t = String(t || '').trim(); let m;
+  if ((m = t.match(new RegExp(`^(.*?)[\\s,:\\-–(]+(\\d+(?:\\.\\d+)?\\s*${UNIT_RE}\\.?|x\\s*\\d+|\\d+\\s*x)\\)?$`, 'i'))) && m[1].trim()) return { name: m[1].trim(), qty: m[2].trim() };
+  if ((m = t.match(new RegExp(`^(\\d+(?:\\.\\d+)?\\s*${UNIT_RE}\\.?)\\s+(?:of\\s+)?(.+)$`, 'i')))) { const n = m[2].trim(); return { name: n[0].toUpperCase() + n.slice(1), qty: m[1].trim() }; }
+  return { name: t, qty: '' };
+}
 function addKitchen() {
-  const inp = $('#kitInput'), v = inp.value.trim(), loc = $('#kitLoc').value; if (!v) return inp.focus();
-  const ex = kitchenMatch(v);
-  if (ex) { ex.status = 'have'; toast(`${ex.name} marked as Have`); }
-  else { S.kitchen.items.push({ id: uidGen(), name: v, loc, status: 'have', qty: '', pc: '' }); toast(`Added to the ${loc}`); }
+  const inp = $('#kitInput'), loc = $('#kitLoc').value; if (!inp.value.trim()) return inp.focus();
+  const { name: v, qty } = splitQty(inp.value), ex = kitchenMatch(v);
+  if (ex) { ex.status = 'have'; if (qty) ex.qty = qty; toast(`${ex.name} marked as Have${qty ? ` · ${qty}` : ''}`); }
+  else { S.kitchen.items.push({ id: uidGen(), name: v, loc, status: 'have', qty, pc: '' }); toast(`Added to the ${loc}${qty ? ` · ${qty}` : ''}`); }
   kitQuery = ''; kitLocDefault = loc; saveKit(); renderKitchen(); renderHeader(); $('#kitInput').focus();
 }
 function addExtra() {
